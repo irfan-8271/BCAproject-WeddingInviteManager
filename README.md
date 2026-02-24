@@ -48,5 +48,3 @@ A desktop application built with Java Swing and JDBC to easily manage and send d
 <img src="Screenshots/loading.jpg" width=400 height =300> <img src="Screenshots/loginpage.jpg" width=400 height =300> 2<img src="Screenshots/signupform.jpg" width=400 height =300><img src="Screenshots/hometab.jpg" width=400 height =300>
 
 
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the issues page.
