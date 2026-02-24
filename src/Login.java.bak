@@ -1,0 +1,2398 @@
+import java.awt.*;
+import java.awt.event.*;
+import javax.swing.*;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import javax.swing.table.DefaultTableModel;
+// Needed for getting row data - Can likely remove if not used      directly
+// --- JDBC Imports —
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
+public class Login extends JFrame {
+   private static final long serialVersionUID = -5570133542241796081L;
+   CardLayout cardLayout;
+   JPanel mainPanel;
+   // --- Current User Info ---
+   private String loggedInUserMobile; // Stores the mobile number of the logged-in user
+   // --- Sign Up Fields ---
+   private JTextField signUpNameField;
+   private JTextField signUpMobileField;
+   private JSpinner signUpAgeSpinner;
+   private JRadioButton signUpRdbtnMale, signUpRdbtnFemale;
+   private JComboBox<String> signUpSecurityQuestionComboBox;
+   private JTextField signUpAnswerField;
+   private JPasswordField signUpPassField;
+   private final ButtonGroup signUpButtonGroup = new ButtonGroup();
+   // --- Invite Banane Ke Liye Input Fields ---
+   private JTextField brideNameTextField;
+   private JTextField groomNameTextField;
+   private JTextField dateTextField;
+   private JTextField timeTextField;
+   private JTextField venueTextField;
+   private JTextField addressTextField;
+   private JTextField dressCodeTextField;
+   private String senderName = "Your Name Here";
+ 
+//  login/profile load Hone Par Update Hoga // 
+            //  --- Home Tab Fields ---
+   private JTextArea inviteTextArea;
+   private JTabbedPane appPane; 
+
+
+     // tabbed pane Ke Liye Instance variable // 
+           // --- Guest List Fields ---
+   private JTable guestTable;
+   private DefaultTableModel guestTableModel;
+   // --- Profile Tab Fields ---
+   private JTextField profileNameField;
+   private JTextField profileMobileField; 
+               // Display only //
+   private JSpinner profileAgeSpinner;
+   private JRadioButton profileRdbtnMale, profileRdbtnFemale;
+   private ButtonGroup profileGenderGroup = new ButtonGroup();
+   private JComboBox<String> profileSecurityQuestionComboBox;
+   private JTextField profileAnswerField;
+   private JButton editSaveButton;
+   private boolean profileEditable = false; 
+
+
+       // edit state Toggle Karne Ke Liye // 
+      // --- Forgot Password Fields ---
+   private JTextField forgotMobileField;
+   private JTextField forgotNameField;
+   private JTextField forgotQuestionField;
+   private JTextField forgotAnswerField;
+   private JTextField forgotPasswordField; 
+
+
+    //  retrieved password Display Karne Ke Liye// 
+           // --- Sent History Tab Fields ---
+   private JPanel sentHistoryPanelContainer;
+ 
+//SENT history entries Ko Hold Karne Ke Liye Jpanell // 
+         // --- Received Invites Tab Fields ---
+   private JPanel receivedInvitesPanelContainer; 
+
+
+ // RECEIVED invite entries Ko Hold Karne Ke Liye Jpane
+   // --- Database Connection Details ---//
+
+
+
+
+   private static final String DB_URL = "jdbc:mysql://localhost:3306/wedding_invite_db?useSSL=false&serverTimezone=UTC"; // Added timezone
+   private static final String DB_USER = "root"; // Username 
+   private static final String DB_PASSWORD = "irfan@802119";//password
+   public Login() {
+       // Load JDBC Driver
+       try {
+           Class.forName("com.mysql.cj.jdbc.Driver");
+       } catch (ClassNotFoundException e) {
+          System.err.println("MySQL JDBC Driver not found! Please add Connector/J to classpath.");
+          JOptionPane.showMessageDialog(null, "Database driver not found.\nPlease ensure the MySQL Connector/J library is included in your project's classpath.", "Database Error", JOptionPane.ERROR_MESSAGE);
+          System.exit(1);
+       }
+       setIconImage(Toolkit.getDefaultToolkit().getImage(getClass().getClassLoader().getResource("icons/frameicon.jpg")));
+       setTitle("Wedding Invite Management");
+       setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+       setSize(1020, 600);
+       setLocationRelativeTo(null);
+       cardLayout = new CardLayout();
+       mainPanel = new JPanel(cardLayout);
+       // Create App Pane first (initializes guest list model etc.)
+       appPane = createAppPane();
+       // Creating "card" panels
+       JSplitPane signUpPanel = createSignUpPanel();
+       JPanel loginPanel = createLoginPanel();
+       JPanel forgotPasswordPanel = createForgotPasswordPanel();
+       // Adding panels to the main panel
+       mainPanel.add(signUpPanel, "SIGNUP");
+       mainPanel.add(loginPanel, "LOGIN");
+       mainPanel.add(forgotPasswordPanel, "FORGOT");
+       mainPanel.add(appPane, "APP");
+       getContentPane().add(mainPanel);
+       showWelcome(); // Shows Login panel on completion
+       setVisible(true);
+   }
+    // --- Method to get database connection ---
+   private Connection connectToDatabase() throws SQLException {
+       return DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+   }
+//#########################################################################
+   // ----------------Welcome Loading Window—---------------------
+
+
+   private void showWelcome() {
+       JWindow welcome = new JWindow(this);
+       welcome.setSize(1020, 600);
+       welcome.setLocationRelativeTo(null);
+       ImagePanel w = new ImagePanel("icons/welcome.jpg"); // Ensure this image exists
+       JProgressBar load = new JProgressBar(0, 100);
+       load.setStringPainted(true);
+       welcome.getContentPane().add(BorderLayout.CENTER, w);
+       welcome.getContentPane().add(BorderLayout.PAGE_END, load);
+       welcome.setVisible(true);
+       Timer timer = new Timer(100,null); // Slightly faster timer
+       timer.addActionListener(new ActionListener() {
+           int progress = 0;
+           @Override
+           public void actionPerformed(ActionEvent e) {
+               progress += 5;
+               load.setValue(progress);
+               if (progress >= 100) {
+                   timer.stop();
+                   welcome.dispose();
+                   cardLayout.show(mainPanel, "LOGIN"); // Show Login panel after welcome
+               }
+           }
+       });
+       timer.start();
+   }
+//@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+   
+     // -------------SIGN UP Panel method—----------------------
+
+
+   private JSplitPane createSignUpPanel() {
+       JSplitPane splitPane = new JSplitPane();
+       splitPane.setDividerLocation(300);
+       splitPane.setDividerSize(5);
+       JPanel signpanel = new JPanel();
+       signpanel.setBackground(new Color(234, 154, 71));
+       GridBagLayout gbl_signpanel = new GridBagLayout();
+       gbl_signpanel.columnWidths = new int[] { 100, 100, 100, 100, 100 };
+       gbl_signpanel.rowHeights = new int[] { 0, 0, 0, 0, 20, 20, 0, 0, 0, 0, 20, 20, 20, 20, 0, 0, 0, 20 };
+       gbl_signpanel.columnWeights = new double[] { 1.0, 1.0, 0.0, 0.0 };
+       gbl_signpanel.rowWeights = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+       signpanel.setLayout(gbl_signpanel);
+       splitPane.setRightComponent(signpanel);
+       // --- Sign Up Form Components (Layout largely unchanged) —
+
+
+       JLabel title = new JLabel("SIGN UP FORM");
+       title.setVerticalAlignment(SwingConstants.TOP);
+       title.setToolTipText("Fill The Form");
+       title.setFont(new Font("Algerian", Font.BOLD, 20));
+       GridBagConstraints gbc_title = new GridBagConstraints();
+       gbc_title.anchor = GridBagConstraints.NORTH;
+       gbc_title.gridwidth = 2;
+       gbc_title.insets = new Insets(10, 0, 15, 5);
+       gbc_title.gridx = 1; gbc_title.gridy = 0;
+       signpanel.add(title, gbc_title);
+       ImagePanel addicon = new ImagePanel("icons/Add.jpg"); // Ensure image exists
+       GridBagConstraints gbc_addicon = new GridBagConstraints();
+       gbc_addicon.gridheight = 6; gbc_addicon.insets = new Insets(10, 0, 5, 5);
+       gbc_addicon.gridwidth = 2; gbc_addicon.gridx = 3; gbc_addicon.gridy = 0;
+       gbc_addicon.fill = GridBagConstraints.BOTH; gbc_addicon.weightx = 0.4; gbc_addicon.weighty = 0.5;
+       signpanel.add(addicon, gbc_addicon);
+       
+        
+       // Name
+       JLabel namelbl = new JLabel("NAME-: "); namelbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_namelbl = new GridBagConstraints(); gbc_namelbl.anchor = GridBagConstraints.EAST;
+       gbc_namelbl.insets = new Insets(5, 5, 5, 5); gbc_namelbl.gridx = 0; gbc_namelbl.gridy = 2;
+       signpanel.add(namelbl, gbc_namelbl);
+       signUpNameField = new JTextField(); signUpNameField.setToolTipText("Enter your Name");
+       GridBagConstraints gbc_nameField = new GridBagConstraints(); gbc_nameField.gridwidth = 2;
+       gbc_nameField.fill = GridBagConstraints.HORIZONTAL; gbc_nameField.insets = new Insets(5, 0, 5, 5);
+       gbc_nameField.gridx = 1; gbc_nameField.gridy = 2; gbc_nameField.weightx = 0.6;
+       signpanel.add(signUpNameField, gbc_nameField);
+       
+         // Mobile
+       JLabel mobilelbl = new JLabel("Mobile No-:"); mobilelbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_mobilelbl = new GridBagConstraints(); gbc_mobilelbl.anchor = GridBagConstraints.EAST;
+       gbc_mobilelbl.insets = new Insets(5, 5, 5, 5); gbc_mobilelbl.gridx = 0; gbc_mobilelbl.gridy = 4;
+       signpanel.add(mobilelbl, gbc_mobilelbl);
+       signUpMobileField = new JTextField(); signUpMobileField.setToolTipText("Enter Your 10-digit Mobile No");
+       GridBagConstraints gbc_mobileField = new GridBagConstraints(); gbc_mobileField.gridwidth = 2;
+       gbc_mobileField.insets = new Insets(5, 0, 5, 5); gbc_mobileField.fill = GridBagConstraints.HORIZONTAL;
+       gbc_mobileField.gridx = 1; gbc_mobileField.gridy = 4; gbc_mobileField.weightx = 0.6;
+       signpanel.add(signUpMobileField, gbc_mobileField);
+       
+   // Age
+       JLabel agelbl = new JLabel("Age:- "); agelbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_agelbl = new GridBagConstraints(); gbc_agelbl.anchor = GridBagConstraints.EAST;
+       gbc_agelbl.insets = new Insets(5, 5, 5, 5); gbc_agelbl.gridx = 0; gbc_agelbl.gridy = 6;
+       signpanel.add(agelbl, gbc_agelbl);
+       signUpAgeSpinner = new JSpinner(); signUpAgeSpinner.setModel(new SpinnerNumberModel(22, 15, 75, 1));
+       signUpAgeSpinner.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_spinner = new GridBagConstraints(); gbc_spinner.anchor = GridBagConstraints.WEST;
+       gbc_spinner.insets = new Insets(5, 0, 5, 5); gbc_spinner.gridx = 1; gbc_spinner.gridy = 6;
+       signpanel.add(signUpAgeSpinner, gbc_spinner);
+       	
+   // Gender
+       JLabel genderLabel = new JLabel("Gender-: "); genderLabel.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_genderLabel = new GridBagConstraints(); gbc_genderLabel.anchor = GridBagConstraints.EAST;
+       gbc_genderLabel.insets = new Insets(5, 5, 5, 5); gbc_genderLabel.gridx = 0; gbc_genderLabel.gridy = 8;
+       signpanel.add(genderLabel, gbc_genderLabel);
+       signUpRdbtnMale = new JRadioButton("Male"); signUpButtonGroup.add(signUpRdbtnMale);
+       GridBagConstraints gbc_rdbtnMale = new GridBagConstraints(); gbc_rdbtnMale.anchor = GridBagConstraints.WEST;
+       gbc_rdbtnMale.insets = new Insets(5, 0, 5, 5); gbc_rdbtnMale.gridx = 1; gbc_rdbtnMale.gridy = 8;
+       signpanel.add(signUpRdbtnMale, gbc_rdbtnMale); signUpRdbtnMale.setSelected(true);
+       signUpRdbtnFemale = new JRadioButton("Female"); signUpButtonGroup.add(signUpRdbtnFemale);
+       GridBagConstraints gbc_rdbtnFemale = new GridBagConstraints(); gbc_rdbtnFemale.anchor = GridBagConstraints.WEST;
+       gbc_rdbtnFemale.insets = new Insets(5, 0, 5, 5); gbc_rdbtnFemale.gridx = 2; gbc_rdbtnFemale.gridy = 8;
+       signpanel.add(signUpRdbtnFemale, gbc_rdbtnFemale);
+      
+   // Password
+       JLabel passlbl = new JLabel("Password-: "); passlbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_passlbl = new GridBagConstraints(); gbc_passlbl.anchor = GridBagConstraints.EAST;
+       gbc_passlbl.insets = new Insets(5, 5, 5, 5); gbc_passlbl.gridx = 0; gbc_passlbl.gridy = 10;
+       signpanel.add(passlbl, gbc_passlbl);
+       signUpPassField = new JPasswordField(); signUpPassField.setEchoChar('*');
+       signUpPassField.setToolTipText("Enter a password (min 6 chars recommended)");
+       GridBagConstraints gbc_passField = new GridBagConstraints(); gbc_passField.gridwidth = 2;
+       gbc_passField.insets = new Insets(5, 0, 5, 5); gbc_passField.fill = GridBagConstraints.HORIZONTAL;
+       gbc_passField.gridx = 1; gbc_passField.gridy = 10; gbc_passField.weightx = 0.6;
+       signpanel.add(signUpPassField, gbc_passField);
+       
+   // Security Question
+       JLabel questionLbl = new JLabel("Security Question -:"); questionLbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_questionLbl = new GridBagConstraints(); gbc_questionLbl.anchor = GridBagConstraints.EAST;
+       gbc_questionLbl.insets = new Insets(5, 5, 5, 5); gbc_questionLbl.gridx = 0; gbc_questionLbl.gridy = 12;
+       signpanel.add(questionLbl, gbc_questionLbl);
+       signUpSecurityQuestionComboBox = new JComboBox<>();
+       signUpSecurityQuestionComboBox.setToolTipText("Choose a question for password recovery.");
+       signUpSecurityQuestionComboBox.setModel(new DefaultComboBoxModel<>(new String[] {
+               "Your Pet Name ??", "Historical Hero that Inspires You ??",
+               "Your Childhood Name ??", "Your Favorite Book ??" }));
+       signUpSecurityQuestionComboBox.setFont(new Font("Tahoma", Font.PLAIN, 14));
+       GridBagConstraints gbc_comboBox = new GridBagConstraints(); gbc_comboBox.gridwidth = 2;
+       gbc_comboBox.insets = new Insets(5, 0, 5, 5); gbc_comboBox.fill = GridBagConstraints.HORIZONTAL;
+       gbc_comboBox.gridx = 1; gbc_comboBox.gridy = 12; gbc_comboBox.weightx = 0.6;
+       signpanel.add(signUpSecurityQuestionComboBox, gbc_comboBox);
+       
+   // Answer
+       JLabel answerlbl = new JLabel("Answer-: "); answerlbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_answerlbl = new GridBagConstraints(); gbc_answerlbl.anchor = GridBagConstraints.EAST;
+       gbc_answerlbl.insets = new Insets(5, 5, 5, 5); gbc_answerlbl.gridx = 0; gbc_answerlbl.gridy = 14;
+       signpanel.add(answerlbl, gbc_answerlbl);
+       signUpAnswerField = new JTextField(); signUpAnswerField.setToolTipText("Enter the answer to your security question");
+       GridBagConstraints gbc_answerField = new GridBagConstraints(); gbc_answerField.gridwidth = 2;
+       gbc_answerField.insets = new Insets(5, 0, 5, 5); gbc_answerField.fill = GridBagConstraints.HORIZONTAL;
+       gbc_answerField.gridx = 1; gbc_answerField.gridy = 14; gbc_answerField.weightx = 0.6;
+       signpanel.add(signUpAnswerField, gbc_answerField);
+       
+                 // --- Sign Up Button ---
+       JButton Signbtn = new JButton("Sign up");
+       Signbtn.setFont(new Font("Tahoma", Font.BOLD, 14));
+       Signbtn.addActionListener(new ActionListener() {
+           public void actionPerformed(ActionEvent e) {
+               // Basic Validation
+               String name = signUpNameField.getText().trim();
+               String mobile = signUpMobileField.getText().trim();
+               String password = new String(signUpPassField.getPassword());
+               String answer = signUpAnswerField.getText().trim();
+               Object ageObj = signUpAgeSpinner.getValue();
+               String question = (String) signUpSecurityQuestionComboBox.getSelectedItem();
+               String gender = signUpRdbtnMale.isSelected() ? "Male" : "Female";
+               if (name.isEmpty() || mobile.isEmpty() || password.isEmpty() || answer.isEmpty()) {
+                   JOptionPane.showMessageDialog(Signbtn, "Please fill all required fields.", "Validation Error", JOptionPane.ERROR_MESSAGE); return;
+               }
+                if (!mobile.matches("\\d{10}") ) { // Basic 10-digit check
+                   JOptionPane.showMessageDialog(Signbtn, "Please enter a valid 10-digit mobile number.", "Validation Error", JOptionPane.ERROR_MESSAGE); return;
+               }
+                if (password.length() < 6) { // Basic password length check
+                    
+ 		JOptionPane.showMessageDialog(Signbtn, "Password should be at least 6 characters long.", "Validation Error", JOptionPane.WARNING_MESSAGE);
+                    // Optionally don't return here, just warn
+                }
+               
+                 // --- JDBC Sign Up Logic ---
+               int selection = JOptionPane.showConfirmDialog(Signbtn, "Confirm Sign Up Details?", "Confirm", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+               if (selection == JOptionPane.YES_OPTION) {
+       //*** hash the password using bcrypt before storing. ***
+                   String sql = "INSERT INTO users (mobile, name, age, gender, password, security_question, security_answer) VALUES (?, ?, ?, ?, ?, ?, ?)";
+                   try (Connection conn = connectToDatabase();
+                        PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                       pstmt.setString(1, mobile);
+                       pstmt.setString(2, name);
+                       pstmt.setInt(3, (Integer) ageObj);
+                       pstmt.setString(4, gender);
+                       pstmt.setString(5, password); // Store plain text (NOT RECOMMENDED)
+                       pstmt.setString(6, question);
+                       pstmt.setString(7, answer);
+                       int rowsAffected = pstmt.executeUpdate();
+                       if (rowsAffected > 0) {
+                           JOptionPane.showMessageDialog(Signbtn, "Account Created Successfully! Please Login.", "Confirmation", JOptionPane.INFORMATION_MESSAGE);
+
+
+                            // Clear fields after successful signup
+                            clearSignUpFields();
+                           
+                            // Go to login page
+                           cardLayout.show(mainPanel, "LOGIN");
+                       } else {
+                           JOptionPane.showMessageDialog(Signbtn, "Failed to create account. Please try again.", "Database Error", JOptionPane.ERROR_MESSAGE);
+                       }
+                   } catch (SQLException ex) {
+                       if (ex.getErrorCode() == 1062) { // MySQL duplicate entry error code (for mobile PK)
+                          JOptionPane.showMessageDialog(Signbtn, "This mobile number is already registered.", "Registration Error", JOptionPane.ERROR_MESSAGE);
+                       } else {
+                          JOptionPane.showMessageDialog(Signbtn, "Database error during sign up: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                          ex.printStackTrace();
+                       }
+                   }
+               }
+           }
+       });
+       GridBagConstraints gbc_Signbtn = new GridBagConstraints();
+       gbc_Signbtn.anchor = GridBagConstraints.CENTER;
+       gbc_Signbtn.insets = new Insets(15, 0, 5, 5);
+       gbc_Signbtn.gridx = 1; gbc_Signbtn.gridy = 16;
+       signpanel.add(Signbtn, gbc_Signbtn);
+       JButton tologinBtn = new JButton("Already have an account? Login");
+       tologinBtn.addActionListener(e -> {
+           clearSignUpFields(); // Clear fields when switching
+           cardLayout.show(mainPanel, "LOGIN");
+       });
+       GridBagConstraints gbc_tologinBtn = new GridBagConstraints();
+       gbc_tologinBtn.anchor = GridBagConstraints.EAST;
+       gbc_tologinBtn.insets = new Insets(15, 0, 5, 5);
+       gbc_tologinBtn.gridx = 3; gbc_tologinBtn.gridwidth = 2; gbc_tologinBtn.gridy = 16;
+       signpanel.add(tologinBtn, gbc_tologinBtn);
+       ImagePanel leftPanel = new ImagePanel("icons/left.jpg"); // Ensure image exists
+       leftPanel.setMinimumSize(new Dimension(405, 200));
+       splitPane.setLeftComponent(leftPanel);
+       leftPanel.setLayout(new BorderLayout());
+       return splitPane;
+   }
+   
+    // Helper to clear signup fields
+       private void clearSignUpFields() {
+       signUpNameField.setText("");
+       signUpMobileField.setText("");
+       signUpPassField.setText("");
+       signUpAnswerField.setText("");
+       signUpAgeSpinner.setValue(22); // Reset age
+       signUpRdbtnMale.setSelected(true);
+       signUpSecurityQuestionComboBox.setSelectedIndex(0);
+   }
+         // -------------LOG IN PANEL METHOD------------------
+
+
+//********************************************************************//********************************************************************//********************************************************************
+  
+     private JPanel createLoginPanel() {
+       JPanel loginpanel = new JPanel();
+       loginpanel.setBackground(new Color(150, 203, 201));
+       GridBagLayout gbl_loginpanel = new GridBagLayout();
+       gbl_loginpanel.columnWidths = new int[] { 0, 0, 20, 0, 0, 0, 0, 0, 20, 20, 20, 20, 20 };
+       gbl_loginpanel.rowHeights = new int[] { 15, 15, 0, 0, 0, 0, 0, 0, 0, 15, 15, 15, 15 };
+       gbl_loginpanel.columnWeights = new double[] { 0.4, 0.0, 0.0, 0.0, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 };
+       gbl_loginpanel.rowWeights = new double[] { 0.1, 0.1, 0.1, 0.0, 0.1, 0.0, 0.0, 0.1, 0.4, 0.0, 0.0, 0.0, 0.0 };
+       loginpanel.setLayout(gbl_loginpanel);
+       // --- Login Form Components ---
+       ImagePanel addicon = new ImagePanel("icons/Login.jpg"); // Ensure image exists
+       GridBagConstraints gbc_addicon = new GridBagConstraints(); gbc_addicon.gridheight = 9;
+       gbc_addicon.insets = new Insets(5, 5, 5, 15); gbc_addicon.gridwidth = 2;
+       gbc_addicon.gridx = 0; gbc_addicon.gridy = 0; gbc_addicon.fill = GridBagConstraints.BOTH;
+       gbc_addicon.weightx = 0.4; gbc_addicon.weighty = 1.0;
+       loginpanel.add(addicon, gbc_addicon);
+       JLabel titleLabel = new JLabel("Login"); titleLabel.setFont(new Font("Algerian", Font.BOLD, 24));
+       GridBagConstraints gbc_titleLabel = new GridBagConstraints(); gbc_titleLabel.anchor = GridBagConstraints.CENTER;
+       gbc_titleLabel.gridwidth = 2; gbc_titleLabel.insets = new Insets(10, 0, 15, 5);
+       gbc_titleLabel.gridx = 3; gbc_titleLabel.gridy = 0;
+       loginpanel.add(titleLabel, gbc_titleLabel);
+       JLabel mobilelbl = new JLabel("Mobile-: "); mobilelbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_mobilelbl = new GridBagConstraints(); gbc_mobilelbl.anchor = GridBagConstraints.EAST;
+       gbc_mobilelbl.insets = new Insets(10, 10, 5, 5); gbc_mobilelbl.gridx = 3; gbc_mobilelbl.gridy = 1;
+       loginpanel.add(mobilelbl, gbc_mobilelbl);
+       JTextField usernameField = new JTextField(15); // Used for Mobile Number
+       usernameField.setToolTipText("Enter your registered Mobile Number");
+       GridBagConstraints gbc_usernameField = new GridBagConstraints(); gbc_usernameField.anchor = GridBagConstraints.WEST;
+       gbc_usernameField.fill = GridBagConstraints.HORIZONTAL; gbc_usernameField.insets = new Insets(10, 0, 5, 5);
+       gbc_usernameField.gridx = 4; gbc_usernameField.gridy = 1; gbc_usernameField.weightx = 0.6;
+       loginpanel.add(usernameField, gbc_usernameField);
+       JLabel label = new JLabel("Password:"); label.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_label = new GridBagConstraints(); gbc_label.anchor = GridBagConstraints.EAST;
+       gbc_label.insets = new Insets(5, 10, 5, 5); gbc_label.gridx = 3; gbc_label.gridy = 2;
+       loginpanel.add(label, gbc_label);
+       JPasswordField passwordField = new JPasswordField(15);
+       passwordField.setToolTipText("Enter your password");
+       GridBagConstraints gbc_passwordField = new GridBagConstraints(); gbc_passwordField.anchor = GridBagConstraints.WEST;
+       gbc_passwordField.fill = GridBagConstraints.HORIZONTAL; gbc_passwordField.insets = new Insets(5, 0, 5, 5);
+       gbc_passwordField.gridx = 4; gbc_passwordField.gridy = 2; gbc_passwordField.weightx = 0.6;
+       loginpanel.add(passwordField, gbc_passwordField);
+       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 10, 5));
+       buttonPanel.setOpaque(false);
+       // --- Login Button ---
+       JButton loginButton = new JButton("Login");
+       loginButton.setFont(new Font("Tahoma", Font.BOLD, 15));
+       loginButton.addActionListener(new ActionListener() {
+           public void actionPerformed(ActionEvent e) {
+               String mobile = usernameField.getText().trim();
+               String password = new String(passwordField.getPassword());
+               if (mobile.isEmpty() || password.isEmpty()) {
+                    JOptionPane.showMessageDialog(loginButton, "Please enter Mobile Number and Password.", "Login Error", JOptionPane.WARNING_MESSAGE); return;
+               }
+               if (!mobile.matches("\\d{10}")) { // Basic mobile format validation
+                   JOptionPane.showMessageDialog(loginButton, "Please enter a valid 10-digit mobile number.", "Login Error", JOptionPane.WARNING_MESSAGE); return;
+               }
+
+
+               // --- JDBC Login Logic ---
+                  // *** Use Hashing ***
+               String sql = "SELECT mobile, name FROM users WHERE mobile = ? AND password = ?";
+               try (Connection conn = connectToDatabase();
+                    PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                   pstmt.setString(1, mobile);
+                   pstmt.setString(2, password); // Plain text comparison 
+                   try (ResultSet rs = pstmt.executeQuery()) {
+                       if (rs.next()) { // Login successful
+                           loggedInUserMobile = rs.getString("mobile"); 
+                           // Store logged-in user's mobile
+                           senderName = rs.getString("name"); 
+                           
+                            // Update sender name
+                           System.out.println("Login Successful for: " + loggedInUserMobile); 
+
+
+// Debug
+     // Load user-specific data
+        loadProfileData(); 
+       
+     // Load profile for loggedInUserMobile
+        loadGuestList();           
+
+
+     // Load guest list for loggedInUserMobile
+        loadInvitationDetails();   
+               
+     // Load invite details for loggedInUserMobile
+        loadInvitationHistory();  
+
+
+     // Load SENT history
+         loadReceivedInvitations();
+
+
+     // Load RECEIVED invitations
+         cardLayout.show(mainPanel, "APP"); 
+
+
+      // Go to App screen
+         appPane.setSelectedIndex(0); 
+
+
+      // Go to Home tab
+         usernameField.setText(""); 
+
+
+     // Clear login fields
+        passwordField.setText("");
+                       } else {
+                           // Login failed
+                           System.out.println("Login Failed for mobile: " + mobile); // Debug
+                           JOptionPane.showMessageDialog(loginButton, "Invalid Mobile Number or Password.", "Login Failed", JOptionPane.ERROR_MESSAGE);
+                       }
+                   }
+               } catch (SQLException ex) {
+                   JOptionPane.showMessageDialog(loginButton, "Database error during login: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                   ex.printStackTrace();
+               }
+                          }
+       });
+
+
+				// --- End JDBC Login Logic ---
+
+
+       buttonPanel.add(loginButton);
+       JButton goToForgotPasswordButton = new JButton("Forgot Password?");
+       goToForgotPasswordButton.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       goToForgotPasswordButton.addActionListener(e -> {
+           clearLoginFields(usernameField, passwordField);
+           cardLayout.show(mainPanel, "FORGOT");
+           });
+       buttonPanel.add(goToForgotPasswordButton);
+       GridBagConstraints gbc_buttonPanel = new GridBagConstraints(); gbc_buttonPanel.gridwidth = 2;
+       gbc_buttonPanel.gridx = 3; gbc_buttonPanel.gridy = 4; gbc_buttonPanel.insets = new Insets(10, 0, 5, 5);
+       gbc_buttonPanel.anchor = GridBagConstraints.CENTER;
+       loginpanel.add(buttonPanel, gbc_buttonPanel);
+       JButton goToSignUpButton = new JButton("Create an account? Sign Up");
+       goToSignUpButton.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       goToSignUpButton.addActionListener(e -> {
+            clearLoginFields(usernameField, passwordField);
+            cardLayout.show(mainPanel, "SIGNUP");
+            });
+       GridBagConstraints gbc_goToSignUpButton = new GridBagConstraints(); gbc_goToSignUpButton.gridwidth = 2;
+       gbc_goToSignUpButton.anchor = GridBagConstraints.CENTER; gbc_goToSignUpButton.insets = new Insets(5, 0, 5, 5);
+       gbc_goToSignUpButton.gridx = 3; gbc_goToSignUpButton.gridy = 7;
+       loginpanel.add(goToSignUpButton, gbc_goToSignUpButton);
+       return loginpanel;
+   }
+
+
+   // Helper to clear login fields
+   private void clearLoginFields(JTextField userField, JPasswordField passField) {
+       userField.setText("");
+       passField.setText("");
+   }
+
+
+//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&//&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&
+
+
+   // ----- FORGOT PASSWORD PANEL METHOD --------------------
+   private JPanel createForgotPasswordPanel() {
+       JPanel pswdRecoverpanel = new JPanel();
+       pswdRecoverpanel.setBackground(new Color(0, 153, 255));
+       GridBagLayout gbl_pswdRecoverpanel = new GridBagLayout();
+       pswdRecoverpanel.setLayout(gbl_pswdRecoverpanel);
+       gbl_pswdRecoverpanel.columnWidths = new int[] { 120, 180, 100, 100, 100, 100 };
+       gbl_pswdRecoverpanel.rowHeights = new int[] { 0, 30, 30, 30, 30, 30, 30, 30, 0};
+       gbl_pswdRecoverpanel.columnWeights = new double[] { 0.0, 1.0, 0.0, 0.0, 1.0, Double.MIN_VALUE };
+       gbl_pswdRecoverpanel.rowWeights = new double[] { 0.1, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.1, 1.0 };
+       // --- Forgot Password Components ---
+       JLabel titleLabel = new JLabel("Password Recovery"); titleLabel.setFont(new Font("Algerian", Font.BOLD, 20));
+       GridBagConstraints gbc_titleLabel = new GridBagConstraints(); gbc_titleLabel.gridwidth = 3;
+       gbc_titleLabel.anchor = GridBagConstraints.CENTER; gbc_titleLabel.insets = new Insets(10, 0, 15, 5);
+       gbc_titleLabel.gridx = 0; gbc_titleLabel.gridy = 0;
+       pswdRecoverpanel.add(titleLabel, gbc_titleLabel);
+       // Mobile Input
+       JLabel moblbl = new JLabel("Mobile:-"); moblbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       moblbl.setHorizontalAlignment(SwingConstants.RIGHT);
+       GridBagConstraints gbc_moblbl = new GridBagConstraints(); gbc_moblbl.anchor = GridBagConstraints.EAST;
+       gbc_moblbl.insets = new Insets(0, 5, 5, 5); gbc_moblbl.gridx = 0; gbc_moblbl.gridy = 1;
+       pswdRecoverpanel.add(moblbl, gbc_moblbl);
+       forgotMobileField = new JTextField(15); // Assign to instance variable
+       forgotMobileField.setToolTipText("Enter your registered Mobile Number");
+       GridBagConstraints gbc_mobileField_forgot = new GridBagConstraints(); gbc_mobileField_forgot.anchor = GridBagConstraints.WEST;
+       gbc_mobileField_forgot.fill = GridBagConstraints.HORIZONTAL; gbc_mobileField_forgot.insets = new Insets(0, 5, 5, 5);
+       gbc_mobileField_forgot.gridx = 1; gbc_mobileField_forgot.gridy = 1;
+       pswdRecoverpanel.add(forgotMobileField, gbc_mobileField_forgot);
+       // Search Button
+       JButton searchbtn = new JButton("Search"); searchbtn.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_searchbtn = new GridBagConstraints(); gbc_searchbtn.anchor = GridBagConstraints.WEST;
+       gbc_searchbtn.insets = new Insets(0, 0, 5, 5); gbc_searchbtn.gridx = 2; gbc_searchbtn.gridy = 1;
+       pswdRecoverpanel.add(searchbtn, gbc_searchbtn);
+       // Display Fields (initially non-editable)
+       JLabel namelbl = new JLabel("Name:-"); namelbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       namelbl.setHorizontalAlignment(SwingConstants.RIGHT);
+       GridBagConstraints gbc_namelbl = new GridBagConstraints(); gbc_namelbl.anchor = GridBagConstraints.EAST;
+       gbc_namelbl.insets = new Insets(0, 0, 5, 5); gbc_namelbl.gridx = 0; gbc_namelbl.gridy = 2;
+       pswdRecoverpanel.add(namelbl, gbc_namelbl);
+       forgotNameField = new JTextField(); forgotNameField.setEditable(false); forgotNameField.setBackground(Color.LIGHT_GRAY);
+       GridBagConstraints gbc_namefield = new GridBagConstraints(); gbc_namefield.anchor = GridBagConstraints.WEST;
+       gbc_namefield.fill = GridBagConstraints.HORIZONTAL; gbc_namefield.insets = new Insets(0, 5, 5, 5);
+       gbc_namefield.gridx = 1; gbc_namefield.gridy = 2;
+       pswdRecoverpanel.add(forgotNameField, gbc_namefield);
+       JLabel question = new JLabel("Your Security Question:-"); question.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_question = new GridBagConstraints(); gbc_question.anchor = GridBagConstraints.EAST;
+       gbc_question.insets = new Insets(0, 0, 5, 5); gbc_question.gridx = 0; gbc_question.gridy = 3;
+       pswdRecoverpanel.add(question, gbc_question);
+       forgotQuestionField = new JTextField(); forgotQuestionField.setEditable(false); forgotQuestionField.setBackground(Color.LIGHT_GRAY);
+       GridBagConstraints gbc_questionfield = new GridBagConstraints(); gbc_questionfield.anchor = GridBagConstraints.WEST;
+       gbc_questionfield.fill = GridBagConstraints.HORIZONTAL; gbc_questionfield.insets = new Insets(0, 5, 5, 5);
+       gbc_questionfield.gridx = 1; gbc_questionfield.gridy = 3; gbc_questionfield.gridwidth = 2;
+       pswdRecoverpanel.add(forgotQuestionField, gbc_questionfield);
+       // Answer Input
+       JLabel anslbl = new JLabel("Answer:-"); anslbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_anslbl = new GridBagConstraints(); gbc_anslbl.anchor = GridBagConstraints.EAST;
+       gbc_anslbl.insets = new Insets(0, 0, 5, 5); gbc_anslbl.gridx = 0; gbc_anslbl.gridy = 4;
+       pswdRecoverpanel.add(anslbl, gbc_anslbl);
+       forgotAnswerField = new JTextField(); // Assign to instance variable
+       forgotAnswerField.setToolTipText("Enter the answer to your security question");
+       GridBagConstraints gbc_ansfield = new GridBagConstraints(); gbc_ansfield.anchor = GridBagConstraints.WEST;
+       gbc_ansfield.fill = GridBagConstraints.HORIZONTAL; gbc_ansfield.insets = new Insets(0, 5, 5, 5);
+       gbc_ansfield.gridx = 1; gbc_ansfield.gridy = 4;
+       pswdRecoverpanel.add(forgotAnswerField, gbc_ansfield);
+       // Image
+       ImagePanel addicon = new ImagePanel("icons/forgot.png"); // Ensure image exists
+       addicon.setBackground(new Color(0, 153, 255));
+       GridBagConstraints gbc_addicon_f = new GridBagConstraints(); gbc_addicon_f.gridheight = 7;
+       gbc_addicon_f.insets = new Insets(0, 10, 5, 5); gbc_addicon_f.gridwidth = 3;
+       gbc_addicon_f.gridx = 3; gbc_addicon_f.gridy = 0; gbc_addicon_f.fill = GridBagConstraints.BOTH;
+       gbc_addicon_f.weightx = 0.5; gbc_addicon_f.weighty = 1.0;
+       pswdRecoverpanel.add(addicon, gbc_addicon_f);
+       // Password Display
+       JLabel passslbl = new JLabel("Password:-"); passslbl.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       GridBagConstraints gbc_passslbl = new GridBagConstraints(); gbc_passslbl.anchor = GridBagConstraints.EAST;
+       gbc_passslbl.insets = new Insets(0, 0, 5, 5); gbc_passslbl.gridx = 0; gbc_passslbl.gridy = 5;
+       pswdRecoverpanel.add(passslbl, gbc_passslbl);
+       forgotPasswordField = new JTextField(); forgotPasswordField.setEditable(false); forgotPasswordField.setBackground(Color.LIGHT_GRAY);
+       forgotPasswordField.setFont(new Font("Tahoma", Font.BOLD, 14));
+
+
+       // Make it bold
+       GridBagConstraints gbc_pswdfield = new GridBagConstraints(); gbc_pswdfield.anchor = GridBagConstraints.WEST;
+       gbc_pswdfield.fill = GridBagConstraints.HORIZONTAL; gbc_pswdfield.insets = new Insets(0, 5, 5, 5);
+       gbc_pswdfield.gridx = 1; gbc_pswdfield.gridy = 5;
+       pswdRecoverpanel.add(forgotPasswordField, gbc_pswdfield);
+
+
+       // Verify Button
+       JButton verifybtn = new JButton("Verify & Retrieve");
+       verifybtn.setFont(new Font("Tahoma", Font.ITALIC, 15));
+       GridBagConstraints gbc_verifybtn = new GridBagConstraints(); gbc_verifybtn.anchor = GridBagConstraints.WEST;
+       gbc_verifybtn.insets = new Insets(0, 0, 5, 5); gbc_verifybtn.gridx = 2; gbc_verifybtn.gridy = 5;
+       pswdRecoverpanel.add(verifybtn, gbc_verifybtn);
+
+
+       // Back to Login Button
+       JButton goToLoginButton = new JButton("Back to Login");
+       goToLoginButton.setFont(new Font("Tahoma", Font.PLAIN, 15));
+       goToLoginButton.addActionListener(e -> {
+           clearForgotPasswordFields();
+           cardLayout.show(mainPanel, "LOGIN");
+       });
+       GridBagConstraints gbc_goToLoginButton = new GridBagConstraints();
+       gbc_goToLoginButton.insets = new Insets(20, 10, 10, 10); gbc_goToLoginButton.gridx = 1;
+       gbc_goToLoginButton.gridy = 7; gbc_goToLoginButton.anchor = GridBagConstraints.CENTER;
+       pswdRecoverpanel.add(goToLoginButton, gbc_goToLoginButton);
+
+
+       // --- ActionListeners for Forgot Password ---
+       searchbtn.addActionListener(e -> {
+           String mobile = forgotMobileField.getText().trim();
+           if (mobile.isEmpty() || !mobile.matches("\\d{10}")) {
+               JOptionPane.showMessageDialog(pswdRecoverpanel, "Please enter a valid 10-digit Mobile Number to search.", "Input Required", JOptionPane.WARNING_MESSAGE); return;
+           }
+           String sql = "SELECT name, security_question FROM users WHERE mobile = ?";
+           try (Connection conn = connectToDatabase();
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
+               pstmt.setString(1, mobile);
+               try (ResultSet rs = pstmt.executeQuery()) {
+                   if (rs.next()) {
+                       forgotNameField.setText(rs.getString("name"));
+                       forgotQuestionField.setText(rs.getString("security_question"));
+                       forgotAnswerField.setText(""); // Clear previous answer
+                       forgotPasswordField.setText(""); // Clear previous password
+                   } else {
+                       JOptionPane.showMessageDialog(pswdRecoverpanel, "Mobile Number not found.", "Search Failed", JOptionPane.ERROR_MESSAGE);
+                       clearForgotPasswordFields(); // Clear all fields if not found
+                   }
+               }
+           } catch (SQLException ex) {
+               JOptionPane.showMessageDialog(pswdRecoverpanel, "Database error during search: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+               ex.printStackTrace();
+           }
+       });
+       verifybtn.addActionListener(e -> {
+           String mobile = forgotMobileField.getText().trim();
+           String enteredAnswer = forgotAnswerField.getText().trim();
+           if (mobile.isEmpty() || forgotQuestionField.getText().isEmpty()) {
+                JOptionPane.showMessageDialog(pswdRecoverpanel, "Please search for a mobile number first.", "Verification Error", JOptionPane.WARNING_MESSAGE); return;
+           }
+           if (enteredAnswer.isEmpty()) {
+                JOptionPane.showMessageDialog(pswdRecoverpanel, "Please enter the answer to the security question.", "Verification Error", JOptionPane.WARNING_MESSAGE); return;
+           }
+
+
+            // *** WARNING: Retrieving plain text password! ***
+           String sql = "SELECT password FROM users WHERE mobile = ? AND security_answer = ?";
+           try (Connection conn = connectToDatabase();
+                PreparedStatement pstmt = conn.prepareStatement(sql)) {
+               pstmt.setString(1, mobile);
+               pstmt.setString(2, enteredAnswer); // Case-sensitive comparison usually
+               try (ResultSet rs = pstmt.executeQuery()) {
+                   if (rs.next()) {
+                       forgotPasswordField.setText(rs.getString("password")); // Display plain text password
+                        JOptionPane.showMessageDialog(pswdRecoverpanel, "Verification successful! Your password is displayed.\nPlease keep it secure.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                   } else {
+                       JOptionPane.showMessageDialog(pswdRecoverpanel, "Incorrect security answer.", "Verification Failed", JOptionPane.ERROR_MESSAGE);
+                       forgotPasswordField.setText(""); // Clear password field on failure
+                   }
+               }
+           } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(pswdRecoverpanel, "Database error during verification: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+           }
+       });
+       return pswdRecoverpanel;
+   }
+
+
+   // Helper to clear forgot password fields
+   private void clearForgotPasswordFields() {
+       forgotMobileField.setText("");
+       forgotNameField.setText("");
+       forgotQuestionField.setText("");
+       forgotAnswerField.setText("");
+       forgotPasswordField.setText("");
+   }
+
+
+   // ------------ Main App Pane (Tabs) -----------------
+
+
+//55555555555555555555555555555555555555555555555555555555555555555555//55555555555555555555555555555555555555555555555555555555555555555555//55555555555555555555555555555555555555555555555555555555555555555555
+
+
+   private JTabbedPane createAppPane() {
+       if (appPane == null) {
+           appPane = new JTabbedPane();
+       } else {
+           // If reusing, ensure it's cleared (though creating new might be safer on relogin)
+           appPane.removeAll();
+       }
+
+
+       // Create Guest List Tab first to initialize the table model
+       JPanel guesttab = createGuestListTabPanel();
+
+
+       // Home Tab
+       JPanel hometab = createHomeTabPanel();
+       appPane.addTab("    HOME    ", hometab);
+
+
+       // Invite Creation Tab
+       JPanel createInviteTab = createInviteTabPanel();
+       appPane.addTab("Invite Form", null, createInviteTab, "Create/Edit Invitation Details");
+
+
+       // Guest List Tab
+       appPane.addTab("   GuestList   ", null, guesttab, "Manage Guest List");
+
+
+       // --- RENAMED ---
+       // SENT Invitation History Tab (Host's View)
+       JPanel sentHistoryTab = createSentInvitationHistoryTabPanel();
+       appPane.addTab("Sent History", null, sentHistoryTab, "View Invitations You Sent"); // Renamed
+
+
+       // --- NEW ---
+       // RECEIVED Invitations Tab (Guest's View)
+       JPanel receivedInvitesTab = createReceivedInvitationsTabPanel();
+       appPane.addTab("Received Invites", null, receivedInvitesTab, "View Invitations Sent to You");
+
+
+       // --- END NEW ---
+       // Profile Tab
+       JPanel profile = createProfileTabPanel();
+       appPane.addTab("  Profile  ", null, profile, "Manage Profile");
+
+
+       // About Us Tab
+       JPanel about = createAboutUsTabPanel();
+       appPane.addTab("  About Us  ", null, about, "About Application");
+
+
+       // Tab Change Listener
+       appPane.addChangeListener(new ChangeListener() {
+           @Override
+           public void stateChanged(ChangeEvent e) {
+                int selectedIndex = appPane.getSelectedIndex();
+                System.out.println("Tab changed to index: " + selectedIndex + " (" + appPane.getTitleAt(selectedIndex) + ")"); // Debug
+                if (loggedInUserMobile == null) return; // Don't load if not logged in
+                switch (appPane.getTitleAt(selectedIndex)) {
+                   case "    HOME    ":
+                       updateHomeTextArea();
+                       break;
+                   case "   GuestList   ":
+
+
+        // Optionally reload guest list, though usually done on login
+        // loadGuestList();
+           break;
+          case "Sent History": // Index 3 (adjust if order changes)
+          loadInvitationHistory(); // Reload SENT history
+          break;
+          case "Received Invites": // Index 4 
+          loadReceivedInvitations(); // Reload RECEIVED invites
+          break;
+          case "  Profile  ":
+
+
+   // Profile loads on login, might not need reload here unless changed elsewhere
+             break;
+
+
+                    // Add other cases if needed
+                }
+           }
+       });
+       appPane.setSelectedIndex(0); // Select Home tab by default
+       return appPane;
+   }
+
+
+
+
+                //–-----------HOME TAB PANEL----------------
+//********************************************************************//********************************************************************//********************************************************************
+
+
+
+
+   private JPanel createHomeTabPanel() {
+       JPanel hometab = new JPanel();
+       hometab.setBackground(SystemColor.activeCaption);
+       GridBagLayout gbl_hometab = new GridBagLayout();
+       gbl_hometab.columnWidths = new int[] { 0, 0, 0, 0 }; // Removed //extra 0
+       gbl_hometab.rowHeights = new int[] { 0, 0 }; // Simpler layout
+       gbl_hometab.columnWeights = new double[] { 1.0, 0.0, 0.0, Double.MIN_VALUE }; // Adjusted weights
+       gbl_hometab.rowWeights = new double[] { 1.0, 0.0, Double.MIN_VALUE }; // Adjusted weights
+       hometab.setLayout(gbl_hometab);
+       inviteTextArea = new JTextArea();
+       inviteTextArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
+       inviteTextArea.setLineWrap(true);
+       inviteTextArea.setWrapStyleWord(true);
+       inviteTextArea.setEditable(false);
+       inviteTextArea.setMargin(new Insets(10, 10, 10, 10));
+       updateHomeTextArea(); // Populate with initial/default data
+       JScrollPane scrollPane = new JScrollPane(inviteTextArea);
+       GridBagConstraints gbc_scrollPane = new GridBagConstraints();
+       gbc_scrollPane.insets = new Insets(10, 10, 5, 10); // Reduced //bottom inset
+       gbc_scrollPane.gridwidth = 4; // Span columns
+       gbc_scrollPane.fill = GridBagConstraints.BOTH;
+       gbc_scrollPane.gridx = 0; gbc_scrollPane.gridy = 0;
+       gbc_scrollPane.weightx = 1.0; gbc_scrollPane.weighty = 1.0;
+       hometab.add(scrollPane, gbc_scrollPane);
+
+
+       // --- Button Panel at the bottom ---
+       JPanel buttonPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 10, 5)); // Align buttons right
+       buttonPanel.setOpaque(false); // Make transparent if desired
+
+
+       // --- Send Invitation Button ---
+       JButton sendInviteButton = new JButton("Send Invitation(s)");
+       sendInviteButton.setToolTipText("Select guests from 'Guest List' then click here");
+       sendInviteButton.addActionListener(new ActionListener() {
+           public void actionPerformed(ActionEvent e) {
+
+
+               // --- Send Invitation Logic ---
+               int[] selectedRows = guestTable.getSelectedRows();
+               if (selectedRows.length == 0) {
+                    JOptionPane.showMessageDialog(sendInviteButton, "Please select at least one guest from the 'Guest List' tab to send an invitation.", "No Guests Selected", JOptionPane.WARNING_MESSAGE);
+                    return;
+               }
+
+
+               // Check if invitation details exist (basic check)
+                if (brideNameTextField.getText().trim().isEmpty() || groomNameTextField.getText().trim().isEmpty() || dateTextField.getText().trim().isEmpty() || venueTextField.getText().trim().isEmpty()) {
+                    JOptionPane.showMessageDialog(sendInviteButton, "Please ensure Bride, Groom, Date, and Venue details are saved on the 'Invite Form' tab first.", "Missing Details", JOptionPane.WARNING_MESSAGE);
+                     appPane.setSelectedIndex(1); // Go to Invite Form tab
+                    return;
+                }
+
+
+                // Check if invite details are saved in DB
+                int currentInviteId = getCurrentInvitationId(loggedInUserMobile);
+                if (currentInviteId == -1) {
+                    JOptionPane.showMessageDialog(sendInviteButton, "Please SAVE the invitation details on the 'Invite Form' tab before sending.", "Details Not Saved", JOptionPane.WARNING_MESSAGE);
+                     appPane.setSelectedIndex(1); // Go to Invite Form tab
+                    return;
+                }
+                int confirm = JOptionPane.showConfirmDialog(sendInviteButton,
+                        "This will mark invitations as 'Sent' for " + selectedRows.length + " selected guest(s).\nGuests who are registered users will see this in their 'Received Invites' tab.\n\nProceed?",
+                        "Confirm Send", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    recordSentInvitations(selectedRows); // Record in //DB (both sent & received)
+                    // Provide feedback (could be more specific about //sent vs received counts)
+                    JOptionPane.showMessageDialog(sendInviteButton, selectedRows.length + " invitation(s) processed.\nCheck 'Sent History' and recipients check 'Received Invites'.", "Invitations Processed", JOptionPane.INFORMATION_MESSAGE);
+                    loadInvitationHistory(); // Refresh sent history //tab view immediately
+                    // Receiving user needs to log in / refresh their //tab to see it
+                }
+           }
+       });
+       buttonPanel.add(sendInviteButton);
+
+
+       // --- Logout Button ---
+       JButton logoutButton = new JButton("Logout");
+       logoutButton.addActionListener(new ActionListener() {
+           public void actionPerformed(ActionEvent e) {
+               int choice = JOptionPane.showConfirmDialog(hometab, "Are you sure you want to logout?", "Logout Confirmation", JOptionPane.YES_NO_OPTION);
+               if (choice == JOptionPane.YES_OPTION) {
+                   loggedInUserMobile = null; // Clear logged-in user
+                   senderName = "Your Name Here"; // Reset sender name
+                    // Clear form fields and tables
+                    clearAllAppData();
+                   cardLayout.show(mainPanel, "LOGIN"); // Go back to //login screen
+               }
+           }
+       });
+       buttonPanel.add(logoutButton);
+
+
+       // Add button panel to the main panel
+       GridBagConstraints gbc_buttonPanel = new GridBagConstraints();
+       gbc_buttonPanel.anchor = GridBagConstraints.EAST;
+       gbc_buttonPanel.gridwidth = 4;
+       gbc_buttonPanel.insets = new Insets(0, 10, 5, 10); // Top inset 0
+       gbc_buttonPanel.gridx = 0;
+       gbc_buttonPanel.gridy = 1; // Row below text area
+       hometab.add(buttonPanel, gbc_buttonPanel);
+       return hometab;
+   }
+
+
+    // --- Helper to clear data on logout ---
+   private void clearAllAppData() {
+
+
+        // Clear Invite Form
+        if(brideNameTextField != null) brideNameTextField.setText("");
+        if(groomNameTextField != null) groomNameTextField.setText("");
+        if(dateTextField != null) dateTextField.setText("");
+        if(timeTextField != null) timeTextField.setText("");
+        if(venueTextField != null) venueTextField.setText("");
+        if(addressTextField != null) addressTextField.setText("");
+        if(dressCodeTextField != null) dressCodeTextField.setText("");
+
+
+        // Clear Home Text Area Preview
+        updateHomeTextArea(); // Will show defaults
+        // Clear Guest List Table
+        if(guestTableModel != null) guestTableModel.setRowCount(0);
+
+
+        // Clear Profile Fields
+        if(profileNameField != null) profileNameField.setText("");
+        if(profileMobileField != null) profileMobileField.setText("");
+        if(profileAgeSpinner != null) profileAgeSpinner.setValue(22);
+        if(profileGenderGroup != null) profileGenderGroup.clearSelection();
+        if(profileRdbtnMale != null) profileRdbtnMale.setSelected(true); // Default gender selection
+        if(profileSecurityQuestionComboBox != null) profileSecurityQuestionComboBox.setSelectedIndex(0);
+        if(profileAnswerField != null) profileAnswerField.setText("");
+        setProfileFieldsEditable(false); // Ensure profile is not //editable
+
+
+         // Clear History Tab Content
+         if (sentHistoryPanelContainer != null) sentHistoryPanelContainer.removeAll();
+         if (receivedInvitesPanelContainer != null) receivedInvitesPanelContainer.removeAll();
+
+
+         // Repaint necessary if panels are visible (though user logs //out anyway)
+         if (sentHistoryPanelContainer != null) { sentHistoryPanelContainer.revalidate(); sentHistoryPanelContainer.repaint(); }
+         if (receivedInvitesPanelContainer != null) { receivedInvitesPanelContainer.revalidate(); receivedInvitesPanelContainer.repaint(); }
+   }
+
+
+   // --- Update Home Text Area Preview ---
+   private void updateHomeTextArea() {
+       if (inviteTextArea == null) return; // Not ready yet
+       // Use defaults if fields are null or empty after //login/clearing
+       String bride = (brideNameTextField != null && !brideNameTextField.getText().trim().isEmpty()) ? brideNameTextField.getText().trim() : "[Bride's Name]";
+       String groom = (groomNameTextField != null && !groomNameTextField.getText().trim().isEmpty()) ? groomNameTextField.getText().trim() : "[Groom's Name]";
+       String date = (dateTextField != null && !dateTextField.getText().trim().isEmpty()) ? dateTextField.getText().trim() : "[Date]";
+       String time = (timeTextField != null && !timeTextField.getText().trim().isEmpty()) ? timeTextField.getText().trim() : "[Time]";
+       String venue = (venueTextField != null && !venueTextField.getText().trim().isEmpty()) ? venueTextField.getText().trim() : "[Venue]";
+       String address = (addressTextField != null && !addressTextField.getText().trim().isEmpty()) ? addressTextField.getText().trim() : "[Address]";
+       String dressCode = (dressCodeTextField != null && !dressCodeTextField.getText().trim().isEmpty()) ? "Dress code: " + dressCodeTextField.getText().trim() : "(Dress code not specified)";
+       String currentSender = (senderName != null && !senderName.equals("Your Name Here")) ? senderName : "[Your Name]";
+       // Basic template
+       String inviteText = String.format(
+               "        ------- Save the Date! -------\n\n" +
+               "              %s\n" +
+               "                    &\n" +
+               "              %s\n\n" +
+               "          are joyfully inviting you to\n" +
+               "          celebrate their wedding!\n\n" +
+               "        ---------- Details ----------\n\n" +
+               "           Date: %s\n" +
+               "           Time: %s\n" +
+               "          Venue: %s\n" +
+               "        Address: %s\n\n" +
+               "        ---- Additional Information ----\n\n" +
+               "        %s\n\n" +
+               "        ---------------------------------\n" +
+               "        (This is a preview. Invitations will be sent individually\n" +
+               "         based on your selections in the Guest List tab.)\n\n" +
+               "        Warm regards,\n\n" +
+               "        %s",
+               bride, groom, date, time, venue, address, dressCode, currentSender
+       );
+       inviteTextArea.setText(inviteText);
+       inviteTextArea.setCaretPosition(0); // Scroll to top
+   }
+
+
+  
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+
+         // -----------GUEST LIST TAB PANEL-------------------
+
+
+   private JPanel createGuestListTabPanel() {
+       JPanel guesttab = new JPanel();
+       guesttab.setBackground(new Color(0, 206, 209));
+       guesttab.setLayout(new BorderLayout(10, 10));
+
+
+       // Column "Guest ID" is kept internally but hidden from view
+       String[] columnNames = { "Name", "Mobile No", "With Family", "Guest ID" };
+       guestTableModel = new DefaultTableModel(columnNames, 0) {
+            private static final long serialVersionUID = 1L; // Good //practice
+            @Override
+            public Class<?> getColumnClass(int columnIndex) {
+                switch (columnIndex) {
+                    case 2: return Boolean.class; // With Family
+                    case 3: return Integer.class; // Guest ID
+                    default: return String.class;
+                }
+            }
+            @Override
+            public boolean isCellEditable(int row, int column) { return false; } // Non-editable table
+       };
+       guestTable = new JTable(guestTableModel);
+       guestTable.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+       guestTable.setFillsViewportHeight(true);
+       guestTable.setRowHeight(25);
+       guestTable.getTableHeader().setFont(new Font("SansSerif", Font.BOLD, 14));
+       guestTable.setFont(new Font("SansSerif", Font.PLAIN, 13));
+
+
+       // Hide the Guest ID column visually
+       guestTable.getColumnModel().getColumn(3).setMinWidth(0);
+       guestTable.getColumnModel().getColumn(3).setMaxWidth(0);
+       guestTable.getColumnModel().getColumn(3).setWidth(0);
+       JScrollPane tableScrollPane = new JScrollPane(guestTable);
+       guesttab.add(tableScrollPane, BorderLayout.CENTER);
+       JPanel buttonPanel = new JPanel();
+       buttonPanel.setOpaque(false);
+       buttonPanel.setLayout(new FlowLayout(FlowLayout.CENTER, 15, 10));
+
+
+       // --- Add Guest Button ---
+       JButton addButton = new JButton("Add Guest");
+       addButton.setFont(new Font("Tahoma", Font.PLAIN, 14));
+       addButton.addActionListener(e -> showAddUpdateGuestDialog(null)); // Pass null for Add mode
+       buttonPanel.add(addButton);
+
+
+       // --- Update Guest Button ---
+       JButton updateButton = new JButton("Update Guest");
+       updateButton.setFont(new Font("Tahoma", Font.PLAIN, 14));
+       updateButton.addActionListener(e -> {
+           int selectedRow = guestTable.getSelectedRow();
+           if (selectedRow != -1) { // Check for valid selection
+                if (guestTable.getSelectedRowCount() > 1) {
+                     JOptionPane.showMessageDialog(updateButton, "Please select only one guest to update.", "Multiple Guests Selected", JOptionPane.WARNING_MESSAGE);
+                     return;
+                }
+               int modelRow = guestTable.convertRowIndexToModel(selectedRow);
+
+
+                // Get data from the selected row in the *model*
+                String name = (String) guestTableModel.getValueAt(modelRow, 0);
+                String mobile = (String) guestTableModel.getValueAt(modelRow, 1);
+                Boolean withFamily = (Boolean) guestTableModel.getValueAt(modelRow, 2);
+                Integer guestId = (Integer) guestTableModel.getValueAt(modelRow, 3); // Get hidden ID
+                // Create a Guest object or pass individual values
+                Guest guestToUpdate = new Guest(guestId, name, mobile, withFamily);
+               showAddUpdateGuestDialog(guestToUpdate); // Pass Guest //object for Update mode
+           } else {
+               JOptionPane.showMessageDialog(updateButton, "Please select a guest to update.", "No Guest Selected", JOptionPane.WARNING_MESSAGE);
+           }
+       });
+       buttonPanel.add(updateButton);
+
+
+       // --- Delete Guest Button ---
+       JButton deleteButton = new JButton("Delete Guest");
+       deleteButton.setFont(new Font("Tahoma", Font.PLAIN, 14));
+       deleteButton.addActionListener(e -> {
+            int[] selectedRows = guestTable.getSelectedRows(); // Get //all selected view rows
+            if (selectedRows.length > 0) {
+                // Convert view indices to model indices
+                int[] modelRows = new int[selectedRows.length];
+                for(int i=0; i < selectedRows.length; i++){
+                    modelRows[i] = guestTable.convertRowIndexToModel(selectedRows[i]);
+                }
+                String confirmMessage;
+                if (modelRows.length == 1) {
+                   String guestName = (String) guestTableModel.getValueAt(modelRows[0], 0);
+                   confirmMessage = "Are you sure you want to delete guest '" + guestName + "'?";
+                } else {
+                   confirmMessage = "Are you sure you want to delete the selected " + modelRows.length + " guests?";
+                }
+                int choice = JOptionPane.showConfirmDialog(deleteButton, confirmMessage, "Confirm Deletion", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE);
+                if (choice == JOptionPane.YES_OPTION) {
+                   deleteSelectedGuests(modelRows); // Call helper //method to delete
+                }
+            } else {
+                JOptionPane.showMessageDialog(deleteButton, "Please select at least one guest to delete.", "No Guest Selected", JOptionPane.WARNING_MESSAGE);
+            }
+       });
+       buttonPanel.add(deleteButton);
+       guesttab.add(buttonPanel, BorderLayout.SOUTH);
+       return guesttab;
+   }
+
+
+   // --- Helper method to delete selected guests ---
+   private void deleteSelectedGuests(int[] modelRows) {
+        if (loggedInUserMobile == null) return;
+        String sql = "DELETE FROM guests WHERE guest_id = ? AND user_mobile = ?";
+        int successCount = 0;
+        int failCount = 0;
+        List<Integer> rowsToDeleteFromModel = new ArrayList<>(); // //Keep track of rows deleted from DB
+        try (Connection conn = connectToDatabase();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+           // Sort modelRows in descending order to avoid index issues //when removing from model
+            java.util.Arrays.sort(modelRows);
+            for (int i = modelRows.length - 1; i >= 0; i--) { //Iterate backwards
+                 int modelRow = modelRows[i];
+                 int guestId = (Integer) guestTableModel.getValueAt(modelRow, 3); // Get ID from hidden column
+                try {
+                    pstmt.setInt(1, guestId);
+                    pstmt.setString(2, loggedInUserMobile); // Ensure //deletion only for the logged-in user's guest
+                    int rowsAffected = pstmt.executeUpdate();
+                    if (rowsAffected > 0) {
+                        rowsToDeleteFromModel.add(modelRow); // Mark //for removal from table model
+                        successCount++;
+                    } else {
+                        System.err.println("Failed to delete guest ID " + guestId + " from database (might not exist or belong to user).");
+                        failCount++;
+                    }
+                } catch (SQLException innerEx) {
+                     System.err.println("Database error deleting guest ID " + guestId + ": " + innerEx.getMessage());
+                     failCount++;
+                     // Consider if you want to stop on error or //continue deleting others
+                }
+            }
+
+
+
+
+        // End loop
+        } catch (SQLException ex) {
+            JOptionPane.showMessageDialog(this, "Database connection error during deletion: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+            ex.printStackTrace();
+            return; // Stop if connection fails
+        }
+        // Remove successfully deleted rows from the table model (in reverse order)
+         for (int modelRowToRemove : rowsToDeleteFromModel) { // Already sorted descending implicitly by loop above
+             guestTableModel.removeRow(modelRowToRemove);
+         }
+
+
+        // Show summary message
+        StringBuilder message = new StringBuilder();
+        message.append(successCount).append(" guest(s) deleted successfully.");
+        if (failCount > 0) {
+            message.append("\n").append(failCount).append(" deletion(s) failed (see console for details).");
+        }
+        JOptionPane.showMessageDialog(this, message.toString(), "Deletion Complete", JOptionPane.INFORMATION_MESSAGE);
+   }
+
+
+   // --- Load Guest List from DB ---
+   private void loadGuestList() {
+       if (loggedInUserMobile == null || guestTableModel == null) {
+            System.err.println("Cannot load guest list: User not logged in or table model is null.");
+            return;
+       }
+       guestTableModel.setRowCount(0); // Clear existing table data
+       String sql = "SELECT guest_id, guest_name, guest_mobile, with_family FROM guests WHERE user_mobile = ?";
+       System.out.println("Loading guests for: " + loggedInUserMobile); // Debug
+       try (Connection conn = connectToDatabase();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+           pstmt.setString(1, loggedInUserMobile);
+           try (ResultSet rs = pstmt.executeQuery()) {
+               while (rs.next()) {
+                   guestTableModel.addRow(new Object[]{
+                           rs.getString("guest_name"),
+                           rs.getString("guest_mobile"),
+                           rs.getBoolean("with_family"),
+                           rs.getInt("guest_id") // Add guest_id to //the row data (for hidden column)
+                   });
+               }
+                System.out.println("Loaded " + guestTableModel.getRowCount() + " guests."); // Debug
+           }
+       } catch (SQLException ex) {
+           JOptionPane.showMessageDialog(this, "Database error loading guest list: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+           ex.printStackTrace();
+       }
+   }
+
+
+   // --- Unified Add/Update Guest Dialog ---
+   // Inner class to hold guest data for the dialog
+   private static class Guest {
+        final int id; // Use -1 or 0 for new guest if using //auto-increment PK
+        final String name;
+        final String mobile;
+        final boolean withFamily;
+        Guest(int id, String name, String mobile, boolean withFamily) {
+            this.id = id; this.name = name; this.mobile = mobile; this.withFamily = withFamily;
+        }
+    }
+    private void showAddUpdateGuestDialog(Guest guestToUpdate) {  //Pass null for Add, Guest object for Update
+        boolean isUpdateMode = (guestToUpdate != null);
+        String dialogTitle = isUpdateMode ? "Update Guest" : "Add New Guest";
+        String buttonText = isUpdateMode ? "Update Guest Info" : "Add to List";
+        JDialog dialog = new JDialog(this, dialogTitle, true);
+        dialog.setLayout(new GridBagLayout());
+        dialog.getContentPane().setBackground(new Color(220, 240, 240));
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE); // Ensure dialog closes properly
+        // Components
+        JTextField nameField = new JTextField(isUpdateMode ? guestToUpdate.name : "", 20);
+        JTextField mobileField = new JTextField(isUpdateMode ? guestToUpdate.mobile : "", 15);
+        JCheckBox withFamilyCheckBox = new JCheckBox("Invited With Family?", isUpdateMode && guestToUpdate.withFamily);
+        JButton actionButton = new JButton(buttonText);
+        actionButton.setFont(new Font("Tahoma", Font.BOLD, 12));
+        // Make mobile non-editable in Update mode (mobile is often a //key identifier here)
+        if (isUpdateMode) {
+             mobileField.setEditable(false);
+             mobileField.setBackground(Color.LIGHT_GRAY);
+             mobileField.setToolTipText("Mobile number cannot be changed after adding.");
+        } else {
+             mobileField.setToolTipText("Enter guest's 10-digit mobile number");
+        }
+        nameField.setToolTipText("Enter guest's full name");
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(8, 8, 8, 8);
+        gbc.anchor = GridBagConstraints.WEST;
+
+
+        // Layout
+        gbc.gridx = 0; gbc.gridy = 0; gbc.anchor = GridBagConstraints.EAST; dialog.add(new JLabel("Guest Name:"), gbc);
+        gbc.gridx = 1; gbc.anchor = GridBagConstraints.WEST; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; dialog.add(nameField, gbc);
+        gbc.gridx = 0; gbc.gridy = 1; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0; gbc.anchor = GridBagConstraints.EAST; dialog.add(new JLabel("Mobile No:"), gbc);
+        gbc.gridx = 1; gbc.anchor = GridBagConstraints.WEST; gbc.fill = GridBagConstraints.HORIZONTAL; gbc.weightx = 1.0; dialog.add(mobileField, gbc);
+        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER; gbc.fill = GridBagConstraints.NONE; gbc.weightx = 0.0; dialog.add(withFamilyCheckBox, gbc);
+        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2; gbc.anchor = GridBagConstraints.CENTER; gbc.insets = new Insets(15, 8, 8, 8); dialog.add(actionButton, gbc);
+
+
+        // Action Listener for Add/Update Button
+        actionButton.addActionListener(e -> {
+            String name = nameField.getText().trim();
+            String mobileNo = mobileField.getText().trim();
+            boolean withFamily = withFamilyCheckBox.isSelected();
+
+
+            // Validation
+            if (name.isEmpty() || mobileNo.isEmpty()) {
+                JOptionPane.showMessageDialog(dialog, "Name and Mobile Number cannot be empty.", "Input Error", JOptionPane.ERROR_MESSAGE); return;
+            }
+             if (!mobileNo.matches("\\d{10}")) {
+                JOptionPane.showMessageDialog(dialog, "Please enter a valid 10-digit guest mobile number.", "Input Error", JOptionPane.ERROR_MESSAGE); return;
+            }
+             if (loggedInUserMobile == null) {
+                 JOptionPane.showMessageDialog(dialog, "Error: Not logged in. Cannot add/update guest.", "Error", JOptionPane.ERROR_MESSAGE); return;
+             }
+
+
+            // --- JDBC Add/Update Logic ---
+            String sql;
+            if (isUpdateMode) {
+                sql = "UPDATE guests SET guest_name = ?, with_family = ? WHERE guest_id = ? AND user_mobile = ?";
+            } else {
+                sql = "INSERT INTO guests (user_mobile, guest_name, guest_mobile, with_family) VALUES (?, ?, ?, ?)";
+            }
+            try (Connection conn = connectToDatabase();
+                 // Use RETURN_GENERATED_KEYS only for INSERT
+                 PreparedStatement pstmt = conn.prepareStatement(sql, isUpdateMode ? Statement.NO_GENERATED_KEYS : Statement.RETURN_GENERATED_KEYS)) {
+                if (isUpdateMode) {
+                    pstmt.setString(1, name);
+                    pstmt.setBoolean(2, withFamily);
+                    pstmt.setInt(3, guestToUpdate.id);
+                    pstmt.setString(4, loggedInUserMobile); // //Security check
+                } else { // Add mode
+                    pstmt.setString(1, loggedInUserMobile);
+                    pstmt.setString(2, name);
+                    pstmt.setString(3, mobileNo);
+                    pstmt.setBoolean(4, withFamily);
+                }
+                int rowsAffected = pstmt.executeUpdate();
+                if (rowsAffected > 0) {
+                     if (isUpdateMode) {
+                          // Update the row in the table model //directly (more efficient than full reload)
+                           int modelRow = findGuestRowInModel(guestToUpdate.id);
+                           if(modelRow != -1) {
+                               guestTableModel.setValueAt(name, modelRow, 0); // Update name
+                               guestTableModel.setValueAt(withFamily, modelRow, 2); // Update with family
+                           } else {
+                               loadGuestList(); // Fallback to reload //if row not found (shouldn't happen)
+                           }
+                          JOptionPane.showMessageDialog(dialog, "Guest updated successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                     } else {
+                          // Get the generated guest ID for the new //row
+                           int newGuestId = -1;
+                           try (ResultSet generatedKeys = pstmt.getGeneratedKeys()) {
+                               if (generatedKeys.next()) {
+                                   newGuestId = generatedKeys.getInt(1);
+                               } else {
+                                   System.err.println("Failed to retrieve generated key for new guest.");
+                                   loadGuestList(); // Reload list if //key retrieval fails
+                               }
+                           }
+                           if (newGuestId != -1) {
+                              // Add to table model visually AFTER //successful DB insert
+                              guestTableModel.addRow(new Object[] { name, mobileNo, withFamily, newGuestId });
+                           }
+                          JOptionPane.showMessageDialog(dialog, "Guest added successfully.", "Success", JOptionPane.INFORMATION_MESSAGE);
+                     }
+                     dialog.dispose(); // Close dialog on success
+                } else {
+                     if (isUpdateMode) {
+                          JOptionPane.showMessageDialog(dialog, "Failed to update guest. Guest might not exist or belong to this user.", "Update Error", JOptionPane.ERROR_MESSAGE);
+                     } else {
+                          JOptionPane.showMessageDialog(dialog, "Failed to add guest.", "Database Error", JOptionPane.ERROR_MESSAGE);
+                     }
+                }
+            } catch (SQLException ex) {
+                 if (!isUpdateMode && ex.getErrorCode() == 1062) { // //Duplicate mobile/guest combination for this user? Check your //constraints.
+                    JOptionPane.showMessageDialog(dialog, "This guest mobile number might already exist in your list.", "Duplicate Entry", JOptionPane.ERROR_MESSAGE);
+                 } else {
+                    JOptionPane.showMessageDialog(dialog, "Database error " + (isUpdateMode ? "updating" : "adding") + " guest: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                    ex.printStackTrace();
+                 }
+            }
+
+
+            // --- End JDBC Add/Update Logic ---
+        });
+        dialog.pack();
+        dialog.setMinimumSize(new Dimension(400, 200)); // Ensure //minimum size
+        dialog.setResizable(false);
+        dialog.setLocationRelativeTo(this); // Center relative to main //frame
+        dialog.setVisible(true);
+    }
+    
+
+
+//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$//$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$
+
+
+     // Helper to find a guest row in the table model by guest ID
+
+
+    private int findGuestRowInModel(int guestId) {
+       for (int i = 0; i < guestTableModel.getRowCount(); i++) {
+           if (guestTableModel.getValueAt(i, 3).equals(guestId)) { // //Check hidden ID column
+               return i;
+           }
+       }
+       return -1; // Not found
+   }
+
+
+
+
+   
+//********************************************************************//********************************************************************
+//********************************************************************
+
+
+	// --------SENT INVITATION HISTORY TAB PANEL-------------------
+   // Renamed from createInvitationHistoryTabPanel
+
+
+   private JPanel createSentInvitationHistoryTabPanel() {
+       JPanel historytab = new JPanel(new BorderLayout(5, 5));
+       historytab.setBackground(new Color(0, 128, 128)); // Teal color
+       historytab.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+       sentHistoryPanelContainer = new JPanel(); // Use the instance //variable for SENT history
+       sentHistoryPanelContainer.setLayout(new BoxLayout(sentHistoryPanelContainer, BoxLayout.Y_AXIS));
+       sentHistoryPanelContainer.setBackground(Color.WHITE);
+       JScrollPane scrollPane = new JScrollPane(sentHistoryPanelContainer);
+       scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+       scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+       historytab.add(scrollPane, BorderLayout.CENTER);
+       // Initial load happens via tab listener or login
+       return historytab;
+   }
+
+
+   // --- Load SENT History from DB ---
+   // This method remains largely the same, loading data based on //loggedInUserMobile being the SENDER
+   private void loadInvitationHistory() {
+       if (sentHistoryPanelContainer == null || loggedInUserMobile == null) {
+            System.err.println("Cannot load SENT history: Panel null or user not logged in.");
+            return;
+       }
+       sentHistoryPanelContainer.removeAll(); // Clear previous //entries
+       System.out.println("Loading SENT history for: " + loggedInUserMobile); // Debug
+       String sql = "SELECT si.sent_timestamp, g.guest_name, g.guest_mobile, i.bride_name, i.groom_name, i.event_date " +
+                    "FROM sent_invitations si " +
+                    "JOIN guests g ON si.guest_id = g.guest_id " +
+                    "JOIN invitations i ON si.invitation_id = i.invitation_id " +
+                    "WHERE si.user_mobile = ? " + // This user (host) //is the one who SENT (si.user_mobile)
+                    "ORDER BY si.sent_timestamp DESC"; // Show most //recent first
+       try (Connection conn = connectToDatabase();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+           pstmt.setString(1, loggedInUserMobile);
+           try (ResultSet rs = pstmt.executeQuery()) {
+               if (!rs.isBeforeFirst() ) { // Check if ResultSet is //empty
+                   System.out.println("No SENT history found."); // //Debug
+                   JLabel noHistoryLabel = new JLabel("  You have not sent any invitations yet.  ");
+                   noHistoryLabel.setFont(new Font("SansSerif", Font.ITALIC, 14));
+                   noHistoryLabel.setAlignmentX(Component.CENTER_ALIGNMENT); // Center //label
+                   sentHistoryPanelContainer.add(Box.createRigidArea(new Dimension(0, 20)));
+                   sentHistoryPanelContainer.add(noHistoryLabel);
+                   sentHistoryPanelContainer.add(Box.createRigidArea(new Dimension(0, 20)));
+               } else {
+                   System.out.println("Processing SENT history..."); // Debug
+                   while (rs.next()) {
+                       Timestamp sentTime = rs.getTimestamp("sent_timestamp");
+                       String guestName = rs.getString("guest_name");
+                       String guestMobile = rs.getString("guest_mobile");
+                       String bride = rs.getString("bride_name");
+                       String groom = rs.getString("groom_name");
+                       String date = rs.getString("event_date"); // //Can be null, handle appropriately
+                       // Create a simple display label or panel
+                       JPanel historyEntryPanel = createHistoryEntryPanel(sentTime, guestName, guestMobile, bride, groom, date);
+                       sentHistoryPanelContainer.add(historyEntryPanel);
+                       sentHistoryPanelContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing
+                   }
+                   System.out.println("Finished processing SENT history."); // Debug
+               }
+           }
+       } catch (SQLException ex) {
+           System.err.println("Database error loading SENT history: " + ex.getMessage());
+           ex.printStackTrace();
+           JLabel errorLabel = new JLabel("  Error loading sent history: " + ex.getMessage() + "  ");
+           errorLabel.setForeground(Color.RED);
+           sentHistoryPanelContainer.add(errorLabel);
+       }
+       sentHistoryPanelContainer.revalidate();
+       sentHistoryPanelContainer.repaint();
+        System.out.println("Sent History panel updated."); // Debug
+   }
+    // Helper to create a simple display panel for a sent history //entry
+   private JPanel createHistoryEntryPanel(Timestamp sentTime, String guestName, String guestMobile, String bride, String groom, String date) {
+       JPanel panel = new JPanel();
+       panel.setLayout(new FlowLayout(FlowLayout.LEFT)); // Simple //horizontal layout
+       panel.setBorder(BorderFactory.createCompoundBorder(
+               BorderFactory.createMatteBorder(0, 0, 1, 0, Color.LIGHT_GRAY), // Bottom border
+               BorderFactory.createEmptyBorder(5, 5, 5, 5) // Padding
+       ));
+       panel.setBackground(Color.WHITE); // Match container background
+       panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+       JLabel label = new JLabel(String.format("<html><b>Sent:</b> %s | <b>To:</b> %s (%s) | <b>Event:</b> %s & %s on %s</html>",
+           sentTime != null ? sentTime.toString().substring(0, 16) : "N/A", // Format timestamp
+           guestName != null ? guestName : "N/A",
+           guestMobile != null ? guestMobile : "N/A",
+           bride != null ? bride : "[Bride]",
+           groom != null ? groom : "[Groom]",
+           date != null ? date : "[Date]"
+           ));
+       label.setFont(new Font("SansSerif", Font.PLAIN, 12));
+       panel.add(label);
+       // Prevent panel from stretching vertically
+        panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, panel.getPreferredSize().height + 5));
+       return panel;
+   }
+
+
+   // -------------------------RECEIVED INVITATIONS TAB PANEL //(NEW)----------------
+   private JPanel createReceivedInvitationsTabPanel() {
+       JPanel receivedTab = new JPanel(new BorderLayout(5, 5));
+       receivedTab.setBackground(new Color(200, 230, 200)); // Light //green-ish
+       receivedTab.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
+       receivedInvitesPanelContainer = new JPanel(); // Use the //instance variable for RECEIVED invites
+       receivedInvitesPanelContainer.setLayout(new BoxLayout(receivedInvitesPanelContainer, BoxLayout.Y_AXIS));
+       receivedInvitesPanelContainer.setBackground(Color.WHITE);
+       JScrollPane scrollPane = new JScrollPane(receivedInvitesPanelContainer);
+       scrollPane.setVerticalScrollBarPolicy(JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED);
+       scrollPane.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+       receivedTab.add(scrollPane, BorderLayout.CENTER);
+       // Optional: Add buttons for Accept/Decline later if needed
+       // Initial load happens via tab listener or login
+       return receivedTab;
+   }
+
+
+   // --- Load RECEIVED Invitations from DB (NEW) ---
+   private void loadReceivedInvitations() {
+       if (receivedInvitesPanelContainer == null || loggedInUserMobile == null) {
+            System.err.println("Cannot load RECEIVED invitations: Panel null or user not logged in.");
+           return; // Not ready or not logged in
+       }
+       receivedInvitesPanelContainer.removeAll(); // Clear previous //entries
+       System.out.println("Loading RECEIVED invitations for: " + loggedInUserMobile); // Debug
+       // Query to get received invites and sender/invite details
+       String sql = "SELECT r.received_timestamp, r.status, " +
+                    "       i.invitation_id, i.bride_name, i.groom_name, i.event_date, i.event_time, i.venue, i.address, i.dress_code, " +
+                    "       u.name AS sender_name " + // Get sender's //name
+                    "FROM received_invitations r " +
+                    "JOIN invitations i ON r.invitation_id = i.invitation_id " +
+                    "JOIN users u ON r.sender_user_mobile = u.mobile " + // Join users on sender mobile
+                    "WHERE r.recipient_user_mobile = ? " + // Filter //by the logged-in guest's mobile
+                    "ORDER BY r.received_timestamp DESC";
+       try (Connection conn = connectToDatabase();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+           pstmt.setString(1, loggedInUserMobile); // Use the //logged-in user's mobile
+           System.out.println("Executing query for received invites..."); // Debug
+           try (ResultSet rs = pstmt.executeQuery()) {
+               if (!rs.isBeforeFirst()) { // Check if ResultSet is //empty
+                   System.out.println("No received invitations found."); // Debug
+                   JLabel noHistoryLabel = new JLabel("  You have not received any invitations yet.  ");
+                   noHistoryLabel.setFont(new Font("SansSerif", Font.ITALIC, 14));
+                   noHistoryLabel.setAlignmentX(Component.CENTER_ALIGNMENT);
+                   receivedInvitesPanelContainer.add(Box.createRigidArea(new Dimension(0, 20)));
+                   receivedInvitesPanelContainer.add(noHistoryLabel);
+                   receivedInvitesPanelContainer.add(Box.createRigidArea(new Dimension(0, 20)));
+               } else {
+                    System.out.println("Processing received invitations..."); // Debug
+                   while (rs.next()) {
+                       Timestamp receivedTime = rs.getTimestamp("received_timestamp");
+                       String status = rs.getString("status");
+                       String bride = rs.getString("bride_name");
+                       String groom = rs.getString("groom_name");
+                       String date = rs.getString("event_date");
+                       String time = rs.getString("event_time");
+                       String venue = rs.getString("venue");
+                       String address = rs.getString("address");
+                       String dressCode = rs.getString("dress_code");
+                       String sender = rs.getString("sender_name");
+                       int invitationId = rs.getInt("invitation_id"); // Get invitation ID for potential actions
+                       // Create a JPanel for each invite for better //formatting
+                       JPanel invitePanel = createReceivedInviteDisplayPanel(
+                            receivedTime, status, sender, bride, groom, date, time, venue, address, dressCode, invitationId
+                       );
+                       receivedInvitesPanelContainer.add(invitePanel);
+                       receivedInvitesPanelContainer.add(Box.createRigidArea(new Dimension(0, 5))); // Spacing
+                   }
+                    System.out.println("Finished processing received invitations."); // Debug
+               }
+           }
+       } catch (SQLException ex) {
+            System.err.println("Database error loading received invitations: " + ex.getMessage());
+           ex.printStackTrace();
+           JLabel errorLabel = new JLabel("  Error loading received invitations: " + ex.getMessage() + "  ");
+           errorLabel.setForeground(Color.RED);
+           receivedInvitesPanelContainer.add(errorLabel);
+       }
+       receivedInvitesPanelContainer.revalidate();
+       receivedInvitesPanelContainer.repaint();
+        System.out.println("Received invitations panel updated."); // //Debug
+   }
+   // Helper method to create a display panel for a received invite //(NEW)
+   // Added invitationId parameter for future actions
+   private JPanel createReceivedInviteDisplayPanel(Timestamp receivedTime, String status, String sender,
+                                                String bride, String groom, String date, String time, String venue,
+                                                String address, String dressCode, int invitationId) {
+       JPanel panel = new JPanel();
+       panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+       panel.setBorder(BorderFactory.createCompoundBorder(
+           BorderFactory.createLineBorder(Color.GRAY),
+           BorderFactory.createEmptyBorder(8, 8, 8, 8)
+       ));
+       panel.setBackground(new Color(248, 248, 255)); // Ghost white
+       panel.setAlignmentX(Component.LEFT_ALIGNMENT); // Prevent //horizontal stretching
+       Font boldFont = new Font("SansSerif", Font.BOLD, 13);
+       Font plainFont = new Font("SansSerif", Font.PLAIN, 12);
+       Font smallItalicFont = new Font("SansSerif", Font.ITALIC, 11);
+       // --- Top Section: Sender and Time ---
+       JPanel topPanel = new JPanel(new BorderLayout(5, 0));
+       topPanel.setOpaque(false);
+       JLabel senderLabel = new JLabel("From: " + (sender != null ? sender : "Unknown Sender"));
+       senderLabel.setFont(boldFont);
+       topPanel.add(senderLabel, BorderLayout.WEST);
+       JLabel timeLabel = new JLabel("Received: " + (receivedTime != null ? receivedTime.toString().substring(0, 16) : "N/A"));
+       timeLabel.setFont(smallItalicFont);
+       timeLabel.setHorizontalAlignment(SwingConstants.RIGHT);
+       topPanel.add(timeLabel, BorderLayout.EAST);
+       panel.add(topPanel);
+       panel.add(Box.createRigidArea(new Dimension(0, 5)));
+       // --- Middle Section: Event Details ---
+       JLabel eventLabel = new JLabel(String.format("Invites you to the wedding of %s & %s",
+                                            (bride != null ? bride : "[Bride]"), (groom != null ? groom : "[Groom]")));
+       eventLabel.setFont(boldFont);
+       panel.add(eventLabel);
+       panel.add(new JLabel(String.format("Date & Time: %s at %s",
+                                       (date != null ? date : "[Date]"), (time != null ? time : "[Time]")))).setFont(plainFont);
+       panel.add(new JLabel(String.format("Venue: %s", (venue != null ? venue : "[Venue]")))).setFont(plainFont);
+       if (address != null && !address.isEmpty()) {
+           panel.add(new JLabel(String.format("Address: %s", address))).setFont(plainFont);
+       }
+       if (dressCode != null && !dressCode.isEmpty()) {
+          panel.add(new JLabel("Dress Code: " + dressCode)).setFont(plainFont);
+       }
+        panel.add(Box.createRigidArea(new Dimension(0, 8)));
+       // --- Bottom Section: Status and Actions (Placeholder) ---
+       JPanel bottomPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 0));
+       bottomPanel.setOpaque(false);
+       JLabel statusLabel = new JLabel("Status: " + (status != null ? status : "Unknown"));
+       statusLabel.setFont(boldFont);
+       // Simple color coding for status
+       if ("Accepted".equalsIgnoreCase(status)) statusLabel.setForeground(new Color(0, 128, 0));
+       else if ("Declined".equalsIgnoreCase(status)) statusLabel.setForeground(Color.RED);
+       else statusLabel.setForeground(Color.BLUE); // Default for //New/Other
+       bottomPanel.add(statusLabel);
+       // TODO: Add Accept/Decline buttons here later
+       // JButton acceptButton = new JButton("Accept");
+       // JButton declineButton = new JButton("Decline");
+       // bottomPanel.add(acceptButton);
+       // bottomPanel.add(declineButton);
+       // Add ActionListeners to buttons to update the status in //received_invitations table
+       panel.add(bottomPanel);
+       // Make sure panel doesn't stretch vertically too much if //inside BoxLayout
+       panel.setMaximumSize(new Dimension(Integer.MAX_VALUE, panel.getPreferredSize().height));
+       return panel;
+   }
+
+
+   // --- Record Sent Invitations (MODIFIED) ---
+   private void recordSentInvitations(int[] selectedViewRows) {
+        if (loggedInUserMobile == null) {
+            System.err.println("Cannot record invitations: User not logged in.");
+            return;
+        }
+
+
+        // Get current invitation ID for the logged-in user
+        int currentInvitationId = getCurrentInvitationId(loggedInUserMobile);
+        if (currentInvitationId == -1) {
+             JOptionPane.showMessageDialog(this, "Could not find saved invitation details. Please save details on 'Invite Form' first.", "Error", JOptionPane.ERROR_MESSAGE);
+             appPane.setSelectedIndex(1); // Go to Invite Form tab
+             return;
+        }
+        String insertSentSql = "INSERT INTO sent_invitations (invitation_id, guest_id, user_mobile, status) VALUES (?, ?, ?, ?)";
+
+
+        // --- NEW SQL ---
+        String insertReceivedSql = "INSERT INTO received_invitations (recipient_user_mobile, invitation_id, sender_user_mobile, status) VALUES (?, ?, ?, ?)";
+
+
+        // --- Optional check if recipient exists ---
+        String checkUserExistsSql = "SELECT 1 FROM users WHERE mobile = ?";
+        int sentSuccessCount = 0;
+        int sentFailCount = 0;
+        int receivedNotifyCount = 0;
+        int receivedFailCount = 0;
+        int notRegisteredCount = 0;
+        String hostMobile = loggedInUserMobile; // Sender
+        try (Connection conn = connectToDatabase();
+             PreparedStatement pstmtSent = conn.prepareStatement(insertSentSql);
+             PreparedStatement pstmtReceived = conn.prepareStatement(insertReceivedSql);
+             PreparedStatement pstmtCheckUser = conn.prepareStatement(checkUserExistsSql)) { // Prepare check //statement
+            for (int viewRow : selectedViewRows) {
+                int modelRow = guestTable.convertRowIndexToModel(viewRow);
+                int guestId = (Integer) guestTableModel.getValueAt(modelRow, 3); // Get guest ID from hidden //column
+                String guestMobile = (String) guestTableModel.getValueAt(modelRow, 1); // Get guest's mobile
+                // --- 1. Record in SENT history (Host's view) ---
+                try {
+                    pstmtSent.clearParameters(); // Good practice
+                    pstmtSent.setInt(1, currentInvitationId);
+                    pstmtSent.setInt(2, guestId);
+                    pstmtSent.setString(3, hostMobile); // Host sent //it
+                    pstmtSent.setString(4, "Sent");
+                    pstmtSent.executeUpdate();
+                    sentSuccessCount++;
+                } catch (SQLException innerExSent) {
+                    System.err.printf("Failed to record SENT invitation for guest ID %d: %s (Code: %d)%n", guestId, innerExSent.getMessage(), innerExSent.getErrorCode());
+                    if (innerExSent.getErrorCode() == 1062) { // //Duplicate entry
+                        System.err.println(" -> Host: Invitation likely already marked as sent for this guest.");
+                         // Allow received invite attempt even if sent //record already exists
+                         // (Maybe host deleted and re-added guest)
+                         sentSuccessCount++; // Count as success if //duplicate (already sent)
+                    } else {
+                       sentFailCount++;
+                    }
+                }
+
+
+                // --- 2. Attempt to Record in RECEIVED history //(Guest's view, if they are a REGISTERED user) ---
+                if (guestMobile != null && !guestMobile.isEmpty() && guestMobile.matches("\\d{10}")) {
+                   // Check if the guest is actually a registered user
+                   boolean guestIsRegistered = false;
+                   try {
+                        pstmtCheckUser.clearParameters();
+                        pstmtCheckUser.setString(1, guestMobile);
+                        try(ResultSet rsCheck = pstmtCheckUser.executeQuery()) {
+                            guestIsRegistered = rsCheck.next();
+                        }
+                   } catch (SQLException checkEx) {
+                       System.err.println("Error checking if user " + guestMobile + " exists: " + checkEx.getMessage());
+                       receivedFailCount++; // Count as fail if check //fails
+                       continue; // Skip trying to insert received //invite for this guest
+                   }
+                   if (guestIsRegistered) {
+                       try {
+                           pstmtReceived.clearParameters(); // Clear //from previous iteration
+                           pstmtReceived.setString(1, guestMobile);      // The RECIPIENT's mobile
+                           pstmtReceived.setInt(2, currentInvitationId);
+                           pstmtReceived.setString(3, hostMobile);       // The SENDER's mobile
+                           pstmtReceived.setString(4, "New");            // Initial status for receiver
+                           pstmtReceived.executeUpdate();
+                           receivedNotifyCount++;
+                       } catch (SQLException innerExReceived) {
+                           System.err.printf("Failed to record RECEIVED invitation for guest mobile %s: %s (Code: %d)%n", guestMobile, innerExReceived.getMessage(), innerExReceived.getErrorCode());
+                           if (innerExReceived.getErrorCode() == 1062) { // Duplicate entry (recipient/invite combo)
+                               System.err.println(" -> Guest: Invitation likely already received by this guest.");
+                               // Optionally, still count as a //'success' notification attempt? Up to you.
+                               // receivedNotifyCount++; // Uncomment //if duplicate received is ok
+                           } else if (innerExReceived.getSQLState().startsWith("23")) { // FK constraint //(invite_id invalid? should not happen here)
+                               System.err.println(" -> FK Violation: Invitation ID might be invalid (Error unlikely here).");
+                               receivedFailCount++;
+                           } else {
+                               receivedFailCount++;
+                           }
+                       }
+                   } else {
+                       System.out.println("Guest mobile " + guestMobile + " is not a registered user. Skipping received notification.");
+                       notRegisteredCount++;
+                   }
+                } else {
+                    System.err.println("Skipping received notification for guest ID " + guestId + " due to missing or invalid mobile.");
+                    receivedFailCount++; // Count as failed if no //valid mobile
+                }
+            } // End loop through selected rows
+        } catch (SQLException ex) {
+             JOptionPane.showMessageDialog(this, "Database error during invitation recording: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+             ex.printStackTrace();
+             return; // Stop further processing if initial //connection/prepare fails
+        }
+        System.out.println("--- Invitation Send Summary ---");
+        System.out.println(" Sent Records: " + sentSuccessCount + " successful, " + sentFailCount + " failed.");
+        System.out.println(" Received Notifications: " + receivedNotifyCount + " sent, " + receivedFailCount + " failed/skipped, " + notRegisteredCount + " not registered.");
+        System.out.println("------------------------------");
+        // Optionally show a more detailed summary message to the user
+    }
+
+
+    // --- Helper to get the current invitation ID ---
+    private int getCurrentInvitationId(String userMobile) {
+        // Get the latest (most recently updated or created) //invitation for this user
+        String sql = "SELECT invitation_id FROM invitations WHERE user_mobile = ? ORDER BY last_updated DESC LIMIT 1";
+        try (Connection conn = connectToDatabase();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, userMobile);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                    return rs.getInt("invitation_id");
+                } else {
+                     System.out.println("No invitation found for user: " + userMobile); // Debug
+                }
+            }
+        } catch (SQLException ex) {
+             System.err.println("Error getting current invitation ID for " + userMobile + ": " + ex.getMessage());
+            ex.printStackTrace(); // Log error
+        }
+        return -1; // Not found or error
+    }
+
+//____----_--------------_------------------------___________________---------------___________
+   // @@@@@@@@@@@@@@@@@@@@@@@@@@--------------PROFILE TAB PANEL-------------------
+   private JPanel createProfileTabPanel() {
+       JPanel profile = new JPanel();
+       profile.setBackground(new Color(245, 222, 179)); // Wheat color
+       profile.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+       GridBagLayout gbl_profile = new GridBagLayout();
+       gbl_profile.columnWidths = new int[] { 150, 250, 100 };
+       gbl_profile.rowHeights = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; // Added row for password button
+       gbl_profile.columnWeights = new double[] { 0.0, 1.0, 0.0 };
+       gbl_profile.rowWeights = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 }; // Adjusted weights
+       profile.setLayout(gbl_profile);
+       int currentRow = 0;
+       Font labelFont = new Font("Tahoma", Font.BOLD, 14);
+       Font fieldFont = new Font("Tahoma", Font.PLAIN, 14);
+       Insets labelInsets = new Insets(5, 5, 5, 10);
+       Insets fieldInsets = new Insets(5, 0, 5, 5);
+       // --- Profile Form Components ---
+       // Name
+       JLabel namelbl = new JLabel("Name:"); namelbl.setFont(labelFont);
+       GridBagConstraints gbc_namelbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(namelbl, gbc_namelbl);
+       profileNameField = new JTextField(); profileNameField.setFont(fieldFont);
+       GridBagConstraints gbc_nameTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_nameTextField.fill = GridBagConstraints.HORIZONTAL;
+       profile.add(profileNameField, gbc_nameTextField);
+       // Mobile (Display Only)
+       JLabel mobilelbl = new JLabel("Mobile:"); mobilelbl.setFont(labelFont);
+       GridBagConstraints gbc_mobilelbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(mobilelbl, gbc_mobilelbl);
+       profileMobileField = new JTextField(); profileMobileField.setFont(fieldFont);
+       profileMobileField.setEditable(false); profileMobileField.setToolTipText("Mobile number cannot be changed.");
+       profileMobileField.setBackground(Color.LIGHT_GRAY);
+       GridBagConstraints gbc_mobileTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_mobileTextField.fill = GridBagConstraints.HORIZONTAL;
+       profile.add(profileMobileField, gbc_mobileTextField);
+
+
+       // Age
+       JLabel agelbl = new JLabel("Age:"); agelbl.setFont(labelFont);
+       GridBagConstraints gbc_agelbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(agelbl, gbc_agelbl);
+       profileAgeSpinner = new JSpinner(); profileAgeSpinner.setModel(new SpinnerNumberModel(22, 15, 99, 1));
+ 
+      //Increased max age
+       profileAgeSpinner.setFont(fieldFont);
+       GridBagConstraints gbc_spinner = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       profile.add(profileAgeSpinner, gbc_spinner);
+
+
+       // Gender
+       JLabel genderLabel = new JLabel("Gender:"); genderLabel.setFont(labelFont);
+       GridBagConstraints gbc_genderLabel = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(genderLabel, gbc_genderLabel);
+       JPanel genderPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0)); genderPanel.setOpaque(false);
+
+
+    // (Continuing from inside createProfileTabPanel()... )
+       // Gender (continued)
+       profileRdbtnMale = new JRadioButton("Male"); profileRdbtnMale.setFont(fieldFont); profileRdbtnMale.setOpaque(false);
+       profileRdbtnFemale = new JRadioButton("Female"); profileRdbtnFemale.setFont(fieldFont); profileRdbtnFemale.setOpaque(false);
+       profileGenderGroup = new ButtonGroup();
+
+
+ // Re-initialize here //or ensure it's done earlier
+       profileGenderGroup.add(profileRdbtnMale); profileGenderGroup.add(profileRdbtnFemale);
+       genderPanel.add(profileRdbtnMale); genderPanel.add(profileRdbtnFemale);
+       GridBagConstraints gbc_genderPanel = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       profile.add(genderPanel, gbc_genderPanel);
+       // Security Question
+       JLabel questionLbl = new JLabel("Security Question:"); questionLbl.setFont(labelFont);
+       GridBagConstraints gbc_questionLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(questionLbl, gbc_questionLbl);
+       profileSecurityQuestionComboBox = new JComboBox<>();
+       profileSecurityQuestionComboBox.setModel(new DefaultComboBoxModel<>(new String[] {
+               "Your Pet Name ??", "Historical Hero that Inspires You ??",
+               "Your Childhood Name ??", "Your Favorite Book ??" }));
+       profileSecurityQuestionComboBox.setFont(fieldFont);
+       GridBagConstraints gbc_comboBox = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_comboBox.fill = GridBagConstraints.HORIZONTAL;
+       profile.add(profileSecurityQuestionComboBox, gbc_comboBox);
+       // Security Answer
+       JLabel answerlbl = new JLabel("Answer:"); answerlbl.setFont(labelFont);
+       GridBagConstraints gbc_answerlbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       profile.add(answerlbl, gbc_answerlbl);
+       profileAnswerField = new JTextField(); profileAnswerField.setFont(fieldFont);
+       GridBagConstraints gbc_answerField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_answerField.fill = GridBagConstraints.HORIZONTAL;
+       profile.add(profileAnswerField, gbc_answerField);
+       // Edit/Save Button
+       editSaveButton = new JButton("Edit Profile");
+       editSaveButton.setFont(new Font("Tahoma", Font.BOLD, 14));
+       GridBagConstraints gbc_editSaveButton = createGbc(0, currentRow, GridBagConstraints.CENTER, new Insets(20, 5, 5, 5));
+       gbc_editSaveButton.gridwidth = 2;
+       profile.add(editSaveButton, gbc_editSaveButton);
+       currentRow++; // Increment row index for the next button
+       // --- Action Listener for Edit/Save Button ---
+       editSaveButton.addActionListener(e -> {
+           profileEditable = !profileEditable; // Toggle state
+           setProfileFieldsEditable(profileEditable);
+           editSaveButton.setText(profileEditable ? "Save Changes" : "Edit Profile");
+           if (!profileEditable) { // If button was just clicked to SAVE
+               // --- JDBC Save Profile Logic ---
+                if (loggedInUserMobile == null) {
+                     System.err.println("Error saving profile: Not logged in.");
+                     // Re-enable editing or show error
+                      profileEditable = true;
+                      setProfileFieldsEditable(profileEditable);
+                      editSaveButton.setText("Save Changes");
+                      JOptionPane.showMessageDialog(profile, "Cannot save profile. Not logged in.", "Save Error", JOptionPane.ERROR_MESSAGE);
+                    return;
+                }
+                String sql = "UPDATE users SET name = ?, age = ?, gender = ?, security_question = ?, security_answer = ? WHERE mobile = ?";
+                try (Connection conn = connectToDatabase();
+                     PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                    String newName = profileNameField.getText().trim();
+                    Object ageValue = profileAgeSpinner.getValue(); // //Get value first
+                    int newAge = (ageValue instanceof Integer) ? (Integer) ageValue : 22; // Default age if type issue
+                    String newGender = profileRdbtnMale.isSelected() ? "Male" : "Female";
+                    String newQuestion = (String) profileSecurityQuestionComboBox.getSelectedItem();
+                    String newAnswer = profileAnswerField.getText().trim();
+                     if (newName.isEmpty() || newAnswer.isEmpty()) {
+                        JOptionPane.showMessageDialog(profile, "Name and Security Answer cannot be empty.", "Save Error", JOptionPane.ERROR_MESSAGE);
+                         // Re-enable editing if validation fails
+                         profileEditable = true;
+                         setProfileFieldsEditable(profileEditable);
+                         editSaveButton.setText("Save Changes");
+                        return;
+                    }
+                    pstmt.setString(1, newName);
+                    pstmt.setInt(2, newAge);
+                    pstmt.setString(3, newGender);
+                    pstmt.setString(4, newQuestion);
+                    pstmt.setString(5, newAnswer);
+                    pstmt.setString(6, loggedInUserMobile);
+                    int rowsAffected = pstmt.executeUpdate();
+                    if (rowsAffected > 0) {
+                        JOptionPane.showMessageDialog(profile, "Profile changes saved successfully.", "Profile Updated", JOptionPane.INFORMATION_MESSAGE);
+                        senderName = newName; // Update sender name //for invite preview
+                        updateHomeTextArea(); // Reflect name change //in home tab preview
+                    } else {
+                        // This might happen if the mobile number //somehow became invalid or record was deleted externally
+                        JOptionPane.showMessageDialog(profile, "Failed to save profile changes. User record might not exist anymore.", "Save Warning", JOptionPane.WARNING_MESSAGE);
+                    }
+                } catch (SQLException ex) {
+                   JOptionPane.showMessageDialog(profile, "Database error saving profile: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                   ex.printStackTrace();
+                   // Re-enable editing on DB error so user doesn't //lose changes visually
+                   profileEditable = true;
+                   setProfileFieldsEditable(profileEditable);
+                   editSaveButton.setText("Save Changes");
+                }
+                // --- End JDBC Save Profile Logic ---
+           } // End if saving
+       }); // End ActionListener
+       // --- Change Password Button ---
+       JButton changePasswordButton = new JButton("Change Password");
+       changePasswordButton.setFont(new Font("Tahoma", Font.PLAIN, 12));
+       GridBagConstraints gbc_changePassword = createGbc(0, currentRow, GridBagConstraints.CENTER, new Insets(5, 5, 5, 5)); // //Position below Edit/Save
+       gbc_changePassword.gridwidth = 2;
+       profile.add(changePasswordButton, gbc_changePassword);
+       changePasswordButton.addActionListener(e -> {
+            
+           JOptionPane.showMessageDialog(profile,
+               "Password change requires a separate, secure dialog.\n(Current implementation: Passwords stored insecurely as plain text )",
+               "Change Password (Not Fully Implemented)", JOptionPane.INFORMATION_MESSAGE);
+      
+       });
+       // Set initial state (non-editable) when panel is first created
+       setProfileFieldsEditable(profileEditable); // profileEditable //should be false initially
+       return profile;
+   }
+   // --- Load Profile Data from DB ---
+   private void loadProfileData() {
+       if (profileNameField == null || loggedInUserMobile == null) {
+            System.err.println("Cannot load profile: Components not ready or user not logged in.");
+            return; // Check required fields/state
+       }
+       System.out.println("Loading profile for: " + loggedInUserMobile); // Debug
+       String sql = "SELECT name, age, gender, security_question, security_answer FROM users WHERE mobile = ?";
+       try (Connection conn = connectToDatabase();
+            PreparedStatement pstmt = conn.prepareStatement(sql)) {
+           pstmt.setString(1, loggedInUserMobile);
+           try (ResultSet rs = pstmt.executeQuery()) {
+               if (rs.next()) {
+                   String name = rs.getString("name");
+                   profileNameField.setText(name);
+                   profileMobileField.setText(loggedInUserMobile); // //Mobile is the key used for login
+                   profileAgeSpinner.setValue(rs.getObject("age") != null ? rs.getInt("age") : 22); // Handle null age gracefully
+                   String gender = rs.getString("gender");
+                   if ("Male".equalsIgnoreCase(gender)) {
+                       profileRdbtnMale.setSelected(true);
+                   } else if ("Female".equalsIgnoreCase(gender)) {
+                       profileRdbtnFemale.setSelected(true);
+                   } else {
+                       profileRdbtnMale.setSelected(true); // Default //if null or unexpected value
+                   }
+                   // Set combo box, handle null/empty case
+                   String question = rs.getString("security_question");
+                    boolean questionFound = false;
+                    if (question != null && !question.isEmpty()) {
+                        for (int i = 0; i < profileSecurityQuestionComboBox.getItemCount(); i++) {
+                            if (question.equals(profileSecurityQuestionComboBox.getItemAt(i))) {
+                                profileSecurityQuestionComboBox.setSelectedIndex(i);
+                                questionFound = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (!questionFound) {
+                        profileSecurityQuestionComboBox.setSelectedIndex(0); // Default if not //found
+                    }
+                   profileAnswerField.setText(rs.getString("security_answer"));
+                   senderName = name; // Update sender name used in //home tab preview
+                   updateHomeTextArea(); // Update preview with loaded //name
+                   profileEditable = false; // Ensure non-editable //state after load/refresh
+                   setProfileFieldsEditable(false);
+                   // Ensure Edit button text is correct after loading //data
+                   if (editSaveButton != null) {
+                       editSaveButton.setText("Edit Profile"); // //Directly set the text
+                   } else {
+                       // This shouldn't happen if the UI is built //correctly, but good practice
+                       System.err.println("Warning: editSaveButton instance variable is null in loadProfileData.");
+                   }
+                   // --- End NEW CODE ---
+                   System.out.println("Profile loaded successfully."); // Debug
+                   } else {
+                      // Existing handling for user not found...
+                      JOptionPane.showMessageDialog(this, "Could not load profile data. User record may be missing.", "Profile Load Error", JOptionPane.WARNING_MESSAGE);
+                      clearAllAppData(); // Clear potentially //inconsistent data
+                      cardLayout.show(mainPanel, "LOGIN"); // Force //logout
+                   }
+           }
+       } catch (SQLException ex) {
+           JOptionPane.showMessageDialog(this, "Database error loading profile: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+           ex.printStackTrace();
+       }
+   }
+   // Helper method to create GridBagConstraints
+   private GridBagConstraints createGbc(int x, int y, int anchor, Insets insets) {
+       GridBagConstraints gbc = new GridBagConstraints();
+       gbc.gridx = x; gbc.gridy = y; gbc.anchor = anchor; gbc.insets = insets;
+       return gbc;
+   }
+   // Helper to set editable state of profile fields
+   private void setProfileFieldsEditable(boolean editable) {
+        // Add null checks for robustness, although fields should be //initialized
+        if (profileNameField == null || profileAgeSpinner == null || profileRdbtnMale == null ||
+            profileRdbtnFemale == null || profileSecurityQuestionComboBox == null || profileAnswerField == null) {
+             System.err.println("Profile components not fully initialized. Cannot set edit state.");
+            return;
+        }
+       profileNameField.setEditable(editable);
+       // Mobile field is NEVER editable after creation
+       profileAgeSpinner.setEnabled(editable);
+       profileRdbtnMale.setEnabled(editable);
+       profileRdbtnFemale.setEnabled(editable);
+       profileSecurityQuestionComboBox.setEnabled(editable);
+       profileAnswerField.setEditable(editable);
+       // Visual feedback for editable state
+       Color bgColor = editable ? Color.WHITE : new Color(235, 235, 235); // Editable: White, Non-editable: Light Gray
+       profileNameField.setBackground(bgColor);
+       profileAnswerField.setBackground(bgColor);
+        profileAgeSpinner.getEditor().getComponent(0).setBackground(bgColor); // Set spinner background
+        profileSecurityQuestionComboBox.setBackground(editable ? Color.WHITE : bgColor); // Set combo box background
+        // Ensure Mobile field always looks non-editable
+        if(profileMobileField != null) profileMobileField.setBackground(Color.LIGHT_GRAY);
+   }
+   
+   
+   
+   
+   
+   
+   
+   
+   
+   // -------------------------INVITE CREATION TAB //PANEL--------------------------
+   private JPanel createInviteTabPanel() {
+       JPanel createInvite = new JPanel();
+       createInvite.setBackground(SystemColor.activeCaption);
+       createInvite.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+       GridBagLayout gbl_createInvite = new GridBagLayout();
+       gbl_createInvite.columnWidths = new int[] { 180, 300, 100 }; 
+        //Adjusted width for labels
+       gbl_createInvite.rowHeights = new int[] { 0, 0, 0, 0, 0, 0, 0, 0, 0}; // Added row for button
+       gbl_createInvite.columnWeights = new double[] { 0.0, 1.0, 0.0};
+       gbl_createInvite.rowWeights = new double[] { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0 };
+       createInvite.setLayout(gbl_createInvite);
+       int currentRow = 0;
+       Font labelFont = new Font("Tahoma", Font.BOLD, 13);
+       Font fieldFont = new Font("Tahoma", Font.PLAIN, 13);
+       Insets labelInsets = new Insets(5, 5, 5, 10);
+       Insets fieldInsets = new Insets(5, 0, 5, 5);
+       // --- Invite Form Components ---
+       // Bride's Name
+       JLabel brideNamelbl = new JLabel("Bride's Name:"); brideNamelbl.setFont(labelFont);
+       GridBagConstraints gbc_brideNamelbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(brideNamelbl, gbc_brideNamelbl);
+       brideNameTextField = new JTextField(); brideNameTextField.setFont(fieldFont);
+       GridBagConstraints gbc_brideNameTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_brideNameTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(brideNameTextField, gbc_brideNameTextField);
+       // Groom's Name
+       JLabel groomNamelbl = new JLabel("Groom's Name:"); groomNamelbl.setFont(labelFont);
+       GridBagConstraints gbc_groomNamelbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(groomNamelbl, gbc_groomNamelbl);
+       groomNameTextField = new JTextField(); groomNameTextField.setFont(fieldFont);
+       GridBagConstraints gbc_groomNameTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_groomNameTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(groomNameTextField, gbc_groomNameTextField);
+       // Date
+       JLabel dateLbl = new JLabel("Date (e.g., Sat, Oct 26, 2024):"); dateLbl.setFont(labelFont);
+       GridBagConstraints gbc_dateLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(dateLbl, gbc_dateLbl);
+       dateTextField = new JTextField(); dateTextField.setFont(fieldFont);
+       dateTextField.setToolTipText("Format examples: 2024-10-26, October 26, 2024");
+       GridBagConstraints gbc_dateTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_dateTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(dateTextField, gbc_dateTextField);
+       // Time
+       JLabel timeLbl = new JLabel("Time (e.g., 05:00 PM):"); timeLbl.setFont(labelFont);
+       GridBagConstraints gbc_timeLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(timeLbl, gbc_timeLbl);
+       timeTextField = new JTextField(); timeTextField.setFont(fieldFont);
+        timeTextField.setToolTipText("Format examples: 5:00 PM, 17:00");
+       GridBagConstraints gbc_timeTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_timeTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(timeTextField, gbc_timeTextField);
+       // Venue
+       JLabel venueLbl = new JLabel("Venue Name:"); venueLbl.setFont(labelFont);
+       GridBagConstraints gbc_venueLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(venueLbl, gbc_venueLbl);
+       venueTextField = new JTextField(); venueTextField.setFont(fieldFont);
+       GridBagConstraints gbc_venueTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_venueTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(venueTextField, gbc_venueTextField);
+       // Address
+       JLabel addressLbl = new JLabel("Venue Address:"); addressLbl.setFont(labelFont);
+       GridBagConstraints gbc_addressLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(addressLbl, gbc_addressLbl);
+       addressTextField = new JTextField(); addressTextField.setFont(fieldFont);
+       GridBagConstraints gbc_addressTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_addressTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(addressTextField, gbc_addressTextField);
+       // Dress Code
+       JLabel dressCodeLbl = new JLabel("Dress Code (Optional):"); dressCodeLbl.setFont(labelFont);
+       GridBagConstraints gbc_dressCodeLbl = createGbc(0, currentRow, GridBagConstraints.EAST, labelInsets);
+       createInvite.add(dressCodeLbl, gbc_dressCodeLbl);
+       dressCodeTextField = new JTextField(); dressCodeTextField.setFont(fieldFont);
+       GridBagConstraints gbc_dressCodeTextField = createGbc(1, currentRow++, GridBagConstraints.WEST, fieldInsets);
+       gbc_dressCodeTextField.fill = GridBagConstraints.HORIZONTAL;
+       createInvite.add(dressCodeTextField, gbc_dressCodeTextField);
+       // --- Save Button ---
+       JButton saveButton = new JButton("Save Invite Details");
+       saveButton.setFont(new Font("Tahoma", Font.BOLD, 14));
+       GridBagConstraints gbc_saveButton = createGbc(1, currentRow, GridBagConstraints.EAST, new Insets(20, 0, 5, 5)); // Use current row
+       // gbc_saveButton.anchor = GridBagConstraints.EAST; // Already //set by createGbc anchor
+       createInvite.add(saveButton, gbc_saveButton);
+       // --- Action Listener for Save Button ---
+       saveButton.addActionListener(e -> {
+            if (loggedInUserMobile == null) {
+                JOptionPane.showMessageDialog(createInvite, "Error: Not logged in. Please log in again.", "Error", JOptionPane.ERROR_MESSAGE);
+                // Optionally force logout
+                // clearAllAppData(); cardLayout.show(mainPanel, //"LOGIN");
+                return;
+            }
+            // --- JDBC Save/Update Invitation Logic ---
+            // Check if an invitation already exists for this user //(use the helper)
+            int existingInviteId = getCurrentInvitationId(loggedInUserMobile);
+            String sql;
+            boolean isUpdate = (existingInviteId != -1);
+            if (isUpdate) { // Update existing invitation
+                 // Assumes your invitations table has a //`last_updated` column like:
+                 // `last_updated` TIMESTAMP DEFAULT CURRENT_TIMESTAMP //ON UPDATE CURRENT_TIMESTAMP
+                sql = "UPDATE invitations SET bride_name = ?, groom_name = ?, event_date = ?, event_time = ?, venue = ?, address = ?, dress_code = ? " +
+                      "WHERE invitation_id = ? AND user_mobile = ?";
+            } else { // Insert new invitation
+                 // Assumes auto-increment `invitation_id` and //`last_updated` handled by DB default
+                sql = "INSERT INTO invitations (user_mobile, bride_name, groom_name, event_date, event_time, venue, address, dress_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
+            }
+            try (Connection conn = connectToDatabase();
+                 PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                String bride = brideNameTextField.getText().trim();
+                String groom = groomNameTextField.getText().trim();
+                String date = dateTextField.getText().trim();
+                String time = timeTextField.getText().trim();
+                String venue = venueTextField.getText().trim();
+                String address = addressTextField.getText().trim(); //Can be empty
+                String dressCode = dressCodeTextField.getText().trim(); // Can be empty
+                 // Basic validation before saving - adjust as needed
+                 if (bride.isEmpty() || groom.isEmpty() || date.isEmpty() || time.isEmpty() || venue.isEmpty()) {
+                     JOptionPane.showMessageDialog(createInvite, "Please fill in required fields: Bride, Groom, Date, Time, and Venue Name.", "Missing Information", JOptionPane.WARNING_MESSAGE);
+                     return;
+                 }
+                // Set parameters based on INSERT or UPDATE
+                if (isUpdate) { // Set params for UPDATE
+                    pstmt.setString(1, bride);
+                    pstmt.setString(2, groom);
+                    pstmt.setString(3, date);
+                    pstmt.setString(4, time);
+                    pstmt.setString(5, venue);
+                    pstmt.setString(6, address.isEmpty() ? null : address); // Store null if empty
+                    pstmt.setString(7, dressCode.isEmpty() ? null : dressCode); // Store null if empty
+                    pstmt.setInt(8, existingInviteId);
+                    pstmt.setString(9, loggedInUserMobile); // //Security check - ensure user owns this invite
+                } else { // Set params for INSERT
+                    pstmt.setString(1, loggedInUserMobile);
+                    pstmt.setString(2, bride);
+                    pstmt.setString(3, groom);
+                    pstmt.setString(4, date);
+                    pstmt.setString(5, time);
+                    pstmt.setString(6, venue);
+                    pstmt.setString(7, address.isEmpty() ? null : address);
+                    pstmt.setString(8, dressCode.isEmpty() ? null : dressCode);
+                }
+                int rowsAffected = pstmt.executeUpdate();
+                if (rowsAffected > 0) {
+                     updateHomeTextArea(); // Update the preview on //Home tab immediately
+                     JOptionPane.showMessageDialog(createInvite, "Invitation details " + (isUpdate ? "updated" : "saved") + " successfully.\nCheck the HOME tab for preview.", "Details Saved", JOptionPane.INFORMATION_MESSAGE);
+                     appPane.setSelectedIndex(0); // Optional: Switch //to Home tab to see preview
+                } else {
+                     // Update might fail if loggedInUserMobile != //user_mobile in the WHERE clause
+                     JOptionPane.showMessageDialog(createInvite, "Failed to " + (isUpdate ? "update" : "save") + " invitation details.", "Database Error", JOptionPane.ERROR_MESSAGE);
+                }
+            } catch (SQLException ex) {
+                JOptionPane.showMessageDialog(createInvite, "Database error saving invitation: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+                ex.printStackTrace();
+            }
+            // --- End JDBC Save/Update Logic ---
+       });
+       return createInvite;
+   }
+    // --- Load Invitation Details from DB —
+
+
+//####################################################################
+//####################################################################//####################################################################
+
+
+   private void loadInvitationDetails() {
+        if (loggedInUserMobile == null) {
+            System.err.println("Cannot load invitation details: User not logged in.");
+            return;
+        }
+         // Ensure components are initialized before trying to set //text
+         if (brideNameTextField == null) {
+             System.err.println("Cannot load invitation details: UI components not ready.");
+             return;
+         }
+        System.out.println("Loading invitation details for: " + loggedInUserMobile); // Debug
+        String sql = "SELECT bride_name, groom_name, event_date, event_time, venue, address, dress_code " +
+                     "FROM invitations WHERE user_mobile = ? ORDER BY last_updated DESC LIMIT 1";
+        try (Connection conn = connectToDatabase();
+             PreparedStatement pstmt = conn.prepareStatement(sql)) {
+            pstmt.setString(1, loggedInUserMobile);
+            try (ResultSet rs = pstmt.executeQuery()) {
+                if (rs.next()) {
+                     System.out.println("Found existing invitation details."); // Debug
+                    brideNameTextField.setText(rs.getString("bride_name"));
+                    groomNameTextField.setText(rs.getString("groom_name"));
+                    dateTextField.setText(rs.getString("event_date"));
+                    timeTextField.setText(rs.getString("event_time"));
+                    venueTextField.setText(rs.getString("venue"));
+                    addressTextField.setText(rs.getString("address") != null ? rs.getString("address") : ""); // Handle null
+                    dressCodeTextField.setText(rs.getString("dress_code") != null ? rs.getString("dress_code") : ""); // Handle null
+                } else {
+                     // No previous invite saved for this user, clear //fields (optional, or leave as is)
+                      System.out.println("No existing invitation details found. Clearing fields."); // Debug
+                      brideNameTextField.setText("");
+                      groomNameTextField.setText("");
+                      dateTextField.setText("");
+                      timeTextField.setText("");
+                      venueTextField.setText("");
+                      addressTextField.setText("");
+                      dressCodeTextField.setText("");
+                }
+                updateHomeTextArea(); // Update preview after loading //or clearing
+            }
+        } catch (SQLException ex) {
+             JOptionPane.showMessageDialog(this, "Database error loading invitation details: " + ex.getMessage(), "Database Error", JOptionPane.ERROR_MESSAGE);
+             ex.printStackTrace();
+        }
+    }
+   // -------------------------ABOUT US TAB //PANEL---------------------------------
+   private JPanel createAboutUsTabPanel() {
+       JPanel about = new JPanel();
+       about.setBackground(new Color(238, 130, 238)); // Violet
+       about.setLayout(new BorderLayout(10, 10));
+       about.setBorder(BorderFactory.createEmptyBorder(15, 15, 15, 15));
+       JTextArea aboutTextArea = new JTextArea(
+               "=============== About Wedding Invite Manager ===============\n\n" +
+               "Welcome! This application helps you manage your wedding invitations.\n" +"\n We Being Student Group of Dk College of Veer Kunwar Singh University Acknowledge that We are still Learning Database and \n "
+               		+ "certainly would have made Mistakes and not implemented certain Features that we intend to Include as we go further.\n\n "+
+               " Connects to a MySQL database to store user, guest, and invitation information.\n\n" +
+               "Features:\n" +
+               " * User Signup & Login (Uses 10-digit Mobile Number as User ID).\n" +
+               " * Password Recovery via Security Question.\n" +
+               " * Profile Management (Edit Name, Age, Gender, Security Info).\n" +
+               " * Create/Update YOUR Invitation Details (Bride, Groom, Date, Time, Venue, etc.).\n" +
+               " * Live Preview of YOUR Invitation on the Home Tab.\n" +
+               " * Manage Guest List (Add, Update, Delete Guests specific to you).\n" +
+               " * 'Send' Invitations:\n" +
+               "    - Records the send action in YOUR 'Sent History' tab.\n" +
+               "    - If the guest's mobile number is also a registered user, they will\n" +
+               "      see the invitation in THEIR 'Received Invites' tab upon login/refresh.\n" +
+               "" +
+               " * View 'Sent History' (Invitations you sent).\n" +
+               " * View 'Received Invites' (Invitations sent to you by others).\n\n" +
+                "---------------------\n" +
+                "Issues and leftover Implementation to be done in future-:\n" +
+                " * Passwords are currently stored as plain text. THIS IS HIGHLY INSECURE!\n" +
+                " * For any real-world use, implement strong password hashing (e.g., BCrypt).\n" +" * We Could Include RSVP. \n"+" * With Family Unimplemented as we are planning to implement The Plus Ones Allowance instead of it \n"+
+                "---------------------\n" +
+                "Developed with Java Swing & JDBC @Author-MD IRFAN.\n" +
+                "............Version: 1.2..........."
+       );
+       aboutTextArea.setEditable(false);
+       aboutTextArea.setLineWrap(true);
+       aboutTextArea.setWrapStyleWord(true);
+       aboutTextArea.setFont(new Font("Monospaced", Font.PLAIN, 13));
+       aboutTextArea.setMargin(new Insets(10, 10, 10, 10));
+       aboutTextArea.setBackground(new Color(255, 250, 240)); // //Floral white
+       JScrollPane scrollPane = new JScrollPane(aboutTextArea);
+       about.add(scrollPane, BorderLayout.CENTER);
+       return about;
+   }
+	//####################################################################//####################################################################//####################################################################//######
+   // —----------------------- Main Method —-------------------------
+   public static void main(String[] args) {
+       // Set Look and Feel (Optional, Nimbus recommended)
+       try {
+            for (UIManager.LookAndFeelInfo info : UIManager.getInstalledLookAndFeels()) {
+               if ("Nimbus".equals(info.getName())) {
+                   UIManager.setLookAndFeel(info.getClassName());
+                   break; // Use Nimbus if found
+               }
+            }
+       } catch (Exception e) {
+           
+            try {
+                System.err.println("Nimbus L&F not found, falling back to System L&F.");
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            } catch (Exception ex) {
+                System.err.println("Could not set System Look and Feel: " + ex.getMessage());
+            }
+       }
+       // Run the application GUI on the Event Dispatch //Thread (EDT)
+       SwingUtilities.invokeLater(Login::new);
+   }
+} 
+
+
+
+
+// ----------------------------- ImagePanel Class //------------------------------
+//#########################################################
+//#########################################################
+//#########################################################
+// IMAGE SCALING TO FIT IN A JPANEL AND RETURN IT 
+// MAKE SURE "icons" folder is accessible in the classpath //
+class ImagePanel extends JPanel {
+   private static final long serialVersionUID = 2L; //Increment //version
+   private Image originalImage;
+   private Image scaledImage;
+   private int lastWidth = -1;
+   private int lastHeight = -1;
+   private String imagePath; // Store path for error //messages
+   public ImagePanel(String imagePath) {
+       this.imagePath = imagePath; // Store for debugging
+       try {
+           // Use ClassLoader to load images from classpath //(works //better in JARs)
+           java.net.URL imgUrl = getClass().getClassLoader().getResource(imagePath);
+           if (imgUrl != null) {
+               this.originalImage = new ImageIcon(imgUrl).getImage();
+                
+           } else {
+                System.err.println("Error loading image: Resource '" + imagePath + "' not found in classpath.");
+                this.originalImage = null;
+           }
+       } catch (Exception e) {
+           System.err.println("Exception loading image '" + imagePath + "': " + e.getMessage());
+           e.printStackTrace();
+           this.originalImage = null;
+       }
+// Let background show through if image fails or has transparency
+       setOpaque(false); 
+   }
+   @Override
+   protected void paintComponent(Graphics g) {
+       super.paintComponent(g); // Important for Swing painting 
+       int currentWidth = getWidth();
+       int currentHeight = getHeight();
+       if (originalImage != null && currentWidth > 0 && currentHeight > 0) {
+           if (scaledImage == null || currentWidth != lastWidth || currentHeight != lastHeight) {
+                scaledImage = originalImage.getScaledInstance(currentWidth, currentHeight, Image.SCALE_SMOOTH);
+               lastWidth = currentWidth;
+               lastHeight = currentHeight;
+               
+           }
+           if (scaledImage != null) {
+         
+      // draws at 0,0 covering the panel:
+               g.drawImage(scaledImage, 0, 0, currentWidth, currentHeight, this);
+           }
+       } else {
+                     Graphics2D g2d = (Graphics2D) g;
+           g2d.setColor(Color.LIGHT_GRAY);
+           g2d.fillRect(0, 0, currentWidth, currentHeight);
+           g2d.setColor(Color.RED);
+           g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+           String errorText = "Image Not Found";
+           if (imagePath != null) errorText += ": " + imagePath;
+           FontMetrics fm = g2d.getFontMetrics();
+           int stringWidth = fm.stringWidth(errorText);
+           int stringAscent = fm.getAscent();
+           int x = (currentWidth - stringWidth) / 2;
+           int y = (currentHeight + stringAscent) / 2 - fm.getDescent();
+           g2d.drawString(errorText, x, y);
+       }
+   }
+}
+
