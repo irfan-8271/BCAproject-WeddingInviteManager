@@ -47,11 +47,9 @@ A desktop application built with Java Swing and JDBC to easily manage and send d
 ## 📸 Screenshots
 
 ### Login Screen
-[Welcome Screen](Screenshots/loading.jpg)
+![Welcome Screen](Screenshots/loading.jpg)
 ![Login Screen](Screenshots/loginpage.jpg)
-
-### Main Dashboard
-![Main Dashboard](screenshots/home_screen.jpg)
+![Main Dashboard](screenshots/hometab.jpg)
 
 
 ## 🤝 Contributing
